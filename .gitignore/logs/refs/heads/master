@@ -1,0 +1,6 @@
+0000000000000000000000000000000000000000 37e7aa947b98b100190f217804fd515e138d5f70 YAMILA <yamilasilva5@gmail.com> 1719279853 -0300	commit (initial): estructuracion del crud basico
+37e7aa947b98b100190f217804fd515e138d5f70 91ac0ab1482686dbd9c05600a0c76f9b22b7b05f YAMILA <yamilasilva5@gmail.com> 1720107073 -0300	commit: actualizacion
+91ac0ab1482686dbd9c05600a0c76f9b22b7b05f 2561fdb4cc6b3ae717fbc3be0cfd3ddc5d6f9d99 YAMILA <yamilasilva5@gmail.com> 1720107249 -0300	commit: se creo el kodelo user y se agrego la carpeta goodDrinks
+2561fdb4cc6b3ae717fbc3be0cfd3ddc5d6f9d99 37740648372558791688146036eea7f1c935a632 YAMILA <yamilasilva5@gmail.com> 1720107387 -0300	commit: se creo el modelo rating
+37740648372558791688146036eea7f1c935a632 2a1913a4f49d2c7c66fc02dc560bb7b9d6b45771 YAMILA <yamilasilva5@gmail.com> 1720446207 -0300	commit: calificacion creada
+2a1913a4f49d2c7c66fc02dc560bb7b9d6b45771 7b02c41b12492386add851d8869b572628d8a24c YAMILA <yamilasilva5@gmail.com> 1721307760 -0300	commit: backend andando
