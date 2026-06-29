@@ -28,6 +28,7 @@ const wineRoutes = require('./routes/wine');
 const userRoutes = require('./routes/user');
 const ratingRoutes = require('./routes/rating');
 const shelfRoutes = require('./routes/shelf'); 
+const socialRoutes = require('./routes/social');
 
 // --- Definición de Endpoints ---
 app.get('/', (req, res) => {
@@ -38,6 +39,8 @@ app.use('/api/wines', wineRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/shelves', shelfRoutes);
+app.use('/api/shelves', shelfRoutes);
+app.use('/api/social', socialRoutes);
 
 // --- Manejo de Rutas No Encontradas (404) ---
 app.use((req, res, next) => {
