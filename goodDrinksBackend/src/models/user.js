@@ -20,7 +20,15 @@ const userSchema = new mongoose.Schema({
         type: String, 
         required: [true, 'La contraseña es obligatoria'],
         minlength: [6, 'La contraseña debe tener al menos 6 caracteres']
-    }
+    },
+    followers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    following: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }]
 }, {
     timestamps: true // Crea automáticamente los campos createdAt y updatedAt (Muy útil para auditoría)
 });
