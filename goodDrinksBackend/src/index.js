@@ -27,6 +27,7 @@ mongoose.connect(process.env.MONGODB_URI)
 const wineRoutes = require('./routes/wine');
 const userRoutes = require('./routes/user');
 const ratingRoutes = require('./routes/rating');
+const shelfRoutes = require('./routes/shelf'); 
 
 // --- Definición de Endpoints ---
 app.get('/', (req, res) => {
@@ -36,6 +37,7 @@ app.get('/', (req, res) => {
 app.use('/api/wines', wineRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/ratings', ratingRoutes);
+app.use('/api/shelves', shelfRoutes);
 
 // --- Manejo de Rutas No Encontradas (404) ---
 app.use((req, res, next) => {
