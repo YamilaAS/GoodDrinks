@@ -1,46 +1,48 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
+const mongoose = require('mongoose'); // Eliminamos bodyParser porque Express ya lo trae nativo
 const dotenv = require('dotenv');
 const cors = require('cors');
 
+// Cargar variables de entorno antes de cualquier otra cosa
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5003;
 
-// Middleware
-app.use(bodyParser.json());
+// --- Middlewares Globales ---
 app.use(cors());
+app.use(express.json()); // Reemplazo de bodyParser.json()
+app.use(express.urlencoded({ extended: true })); // Para soportar datos de formularios si hace falta
 
-
-// Conectar a MongoDB
+// --- Conexión a MongoDB ---
+// Mongoose ya maneja internamente las opciones antiguas (useNewUrlParser, etc.) en versiones recientes.
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('Error connecting to MongoDB:', err));
+  .then(() => console.log('🚀 Conexión exitosa a MongoDB'))
+  .catch(err => {
+    console.error('❌ Error crítico al conectar a MongoDB:', err.message);
+    process.exit(1); // Detiene la app si no se puede conectar a la BD
+  });
 
-
-// Rutas
-app.get('/', (req, res) => {
-  res.send('Bienvenido a la API de Vinos');
-});
-
+// --- Importación de Rutas ---
 const wineRoutes = require('./routes/wine');
 const userRoutes = require('./routes/user');
 const ratingRoutes = require('./routes/rating');
 
+// --- Definición de Endpoints ---
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'Bienvenido a la API de GoodDrinks' });
+});
 
 app.use('/api/wines', wineRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/ratings', ratingRoutes);
 
-
-
-// Iniciar el servidor
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en el puerto ${PORT}`);
+// --- Manejo de Rutas No Encontradas (404) ---
+app.use((req, res, next) => {
+  res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
-
-
-
+// --- Iniciar el Servidor ---
+app.listen(PORT, () => {
+  console.log(`📡 Servidor corriendo en http://localhost:${PORT}`);
+});
