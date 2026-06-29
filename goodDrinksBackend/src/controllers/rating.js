@@ -1,126 +1,90 @@
 const Rating = require('../models/rating');
 const Wine = require('../models/wine');
-const User = require('../models/user');
 
-
+// Crear una nueva calificación
 exports.createRating = async (req, res) => { 
     try {
-        const { userId, wineId, rating, comments } = req.body;
+        const { wineId, rating, comments } = req.body;
+        const userId = req.user.id; // Tomado de forma segura desde el JWT decodificado
 
-        if (!userId || !wineId || rating === undefined) {
-            return res.status(400).json({ message: 'Datos incompletos: userId, wineId y rating son requeridos' });
+        if (!wineId || rating === undefined) {
+            return res.status(400).json({ error: 'wineId y rating son requeridos' });
         }
-        console.log('Datos recibidos:', { userId, wineId, rating, comments });
 
+        // Comprobar si el usuario ya calificó este vino
         const existingRating = await Rating.findOne({ user: userId, wine: wineId });
         if (existingRating) {
-            return res.status(400).json({ message: 'Ya has comentado sobre este vino.' });
+            return res.status(400).json({ error: 'Ya has calificado este vino anteriormente.' });
         }
 
         const newRating = new Rating({ user: userId, wine: wineId, rating, comments });
-        await newRating.save();
+        await newRating.save(); 
+        // Nota: Al ejecutarse .save(), automáticamente el pre/post-hook del modelo 
+        // recalcula el averageRating en el modelo Wine. No hace falta hacer más nada aquí.
 
-        console.log('Nueva calificación guardada:', newRating);
-
-        const ratings = await Rating.find({ wine: wineId });
-        const totalRatings = ratings.length;
-        const sumRatings = ratings.reduce((sum, r) => sum + r.rating, 0);
-        const averageRating = sumRatings / totalRatings;
-
-        console.log('Calificaciones totales:', totalRatings);
-        console.log('Suma de calificaciones:', sumRatings);
-        console.log('Calificación promedio:', averageRating);
-
-        await Wine.findByIdAndUpdate(wineId, { averageRating });
-
-        res.json(newRating);
+        res.status(201).json(newRating);
     } catch (err) {
-        console.error('Error al añadir la calificación:', err);
-        res.status(500).json({ message: 'Error al añadir la calificación', error: err });
+        res.status(500).json({ error: 'Error al añadir la calificación', details: err.message });
     }
 };
-
 
 // Obtener las calificaciones de un vino específico
 exports.getRatingsByWine = async (req, res) => {
     try {
-        const wineId = req.params.wineId;
-        console.log('wineId:', wineId); 
+        const { wineId } = req.params;
 
-        const ratings = await Rating.find({ wine: wineId }).populate('user', 'username');
-        console.log('ratings:', ratings); // Verificar las calificaciones obtenidas
-
-        res.json(ratings);
+        // Trae los ratings y adjunta el username del usuario que comentó
+        const ratings = await Rating.find({ wine: wineId })
+                                    .populate('user', 'username')
+                                    .sort({ createdAt: -1 }); // Los más recientes primero
+                                    
+        res.status(200).json(ratings);
     } catch (err) {
-        console.error('Error al obtener las calificaciones:', err);
-        res.status(500).json({ message: 'Error al obtener las calificaciones', error: err });
-        console.log('-------------------------------------------------------------------');
+        res.status(500).json({ error: 'Error al obtener las calificaciones' });
     }
 };
 
-
-// Función para actualizar una calificación
+// Actualizar una calificación
 exports.updateRating = async (req, res) => {
     try {
-        const { ratingId, userId, rating, comments } = req.body;
+        const ratingId = req.params.id; // Tomado de la URL
+        const userId = req.user.id;     // Tomado del Token
+        const { rating, comments } = req.body;
 
-        // Verifica que el rating existe y pertenece al usuario
+        // Buscamos la calificación asegurándonos que le pertenezca a quien la quiere editar
         const existingRating = await Rating.findOne({ _id: ratingId, user: userId });
         if (!existingRating) {
-            return res.status(404).json({ message: 'Calificación no encontrada o no pertenece al usuario' });
+            return res.status(404).json({ error: 'Calificación no encontrada o no tienes permisos' });
         }
 
-        // Actualiza los campos necesarios
         if (rating !== undefined) existingRating.rating = rating;
         if (comments !== undefined) existingRating.comments = comments;
-        await existingRating.save();
+        
+        await existingRating.save(); // Dispara de nuevo el recálculo automático del promedio
 
-        // Actualiza la calificación promedio del vino
-        const ratings = await Rating.find({ wine: existingRating.wine });
-        const totalRatings = ratings.length;
-        const sumRatings = ratings.reduce((sum, r) => sum + r.rating, 0);
-        const averageRating = sumRatings / totalRatings;
-
-        await Wine.findByIdAndUpdate(existingRating.wine, { averageRating });
-
-        res.json(existingRating);
+        res.status(200).json(existingRating);
     } catch (err) {
-        console.error('Error al actualizar la calificación:', err);
-        res.status(500).json({ message: 'Error al actualizar la calificación', error: err });
+        res.status(500).json({ error: 'Error al actualizar la calificación' });
     }
 };
 
-// Función para eliminar una calificación
+// Eliminar una calificación
 exports.deleteRating = async (req, res) => {
     try {
-        const { ratingId, userId } = req.body;
+        const ratingId = req.params.id; // Tomado de la URL
+        const userId = req.user.id;     // Tomado del Token
 
-        // Verifica que el rating existe y pertenece al usuario
-        const existingRating = await Rating.findOne({ _id: ratingId, user: userId });
-        if (!existingRating) {
-            return res.status(404).json({ message: 'Calificación no encontrada o no pertenece al usuario' });
+        // Buscamos y eliminamos en un solo paso si coincide con el usuario dueño
+        const deletedRating = await Rating.findOneAndDelete({ _id: ratingId, user: userId });
+        
+        if (!deletedRating) {
+            return res.status(404).json({ error: 'Calificación no encontrada o no tienes permisos' });
         }
+        // Nota: Al usarse findOneAndDelete, el hook post('findOneAndDelete') 
+        // que programamos en el modelo actualiza el promedio en Wine de forma automática.
 
-        // Elimina la calificación
-        await Rating.deleteOne({ _id: ratingId, user: userId });
-
-        // Actualiza la calificación promedio del vino
-        const ratings = await Rating.find({ wine: existingRating.wine });
-        const totalRatings = ratings.length;
-        const sumRatings = ratings.reduce((sum, r) => sum + r.rating, 0);
-        const averageRating = totalRatings === 0 ? 0 : sumRatings / totalRatings;
-
-        await Wine.findByIdAndUpdate(existingRating.wine, { averageRating });
-
-        res.json({ message: 'Calificación eliminada' });
+        res.status(200).json({ message: 'Calificación eliminada de forma exitosa' });
     } catch (err) {
-        console.error('Error al eliminar la calificación:', err);
-        res.status(500).json({ message: 'Error al eliminar la calificación', error: err });
+        res.status(500).json({ error: 'Error al eliminar la calificación' });
     }
 };
-
-
-
-
-
-
