@@ -21,7 +21,11 @@ const RatingSchema = new mongoose.Schema({
         type: String, 
         trim: true,
         maxlength: [500, 'El comentario no puede superar los 500 caracteres'] 
-    }
+    },
+    likes: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }]
 }, {
     timestamps: true
 });

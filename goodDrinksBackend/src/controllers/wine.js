@@ -18,16 +18,27 @@ exports.createWine = async (req, res) => {
   }
 };
 
-// Obtener todos los vinos (Con opción de filtrado opcional)
+// Obtener todos los vinos (Con opción de filtrado o búsqueda por texto global)
 exports.getAllWines = async (req, res) => {
   try {
-    const filters = {};
+    const { type, winery, search } = req.query;
+    let filters = {};
     
-    // Si mandan filtros por la URL (ej: /api/wines?type=Tinto), los aplicamos de forma limpia
-    if (req.query.type) filters.type = req.query.type;
-    if (req.query.winery) filters.winery = req.query.winery;
+    // 1. Mantenemos tus filtros exactos de antes
+    if (type) filters.type = type;
+    if (winery) filters.winery = winery;
 
-    const wines = await Wine.find(filters);
+    // 2. 🚀 Agregamos el buscador de texto global estilo Goodreads
+    if (search) {
+      filters.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { winery: { $regex: search, $options: 'i' } },
+        { variety: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Buscamos con todos los filtros combinados y ordenamos por los más nuevos primero
+    const wines = await Wine.find(filters).sort({ createdAt: -1 });
     res.status(200).json(wines);
   } catch (err) {
     res.status(500).json({ error: err.message });
