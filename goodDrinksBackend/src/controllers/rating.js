@@ -88,3 +88,31 @@ exports.deleteRating = async (req, res) => {
         res.status(500).json({ error: 'Error al eliminar la calificación' });
     }
 };
+
+// Dar o quitar Like a una reseña (Toggle)
+exports.toggleLikeRating = async (req, res) => {
+    try {
+        const ratingId = req.params.id;
+        const userId = req.user.id; // ID del usuario logueado
+
+        const rating = await Rating.findById(ratingId);
+        if (!rating) {
+            return res.status(404).json({ error: 'Reseña no encontrada' });
+        }
+
+        // Verificamos si el usuario ya le dio like
+        const hasLiked = rating.likes.includes(userId);
+
+        if (hasLiked) {
+            // Si ya tiene like, se lo removemos ($pull)
+            await Rating.findByIdAndUpdate(ratingId, { $pull: { likes: userId } });
+            res.status(200).json({ message: 'Like removido' });
+        } else {
+            // Si no tiene like, se lo agregamos ($addToSet evita duplicados)
+            await Rating.findByIdAndUpdate(ratingId, { $addToSet: { likes: userId } });
+            res.status(200).json({ message: 'Reseña cliqueada con Like con éxito' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: 'Error al procesar el like', details: err.message });
+    }
+};
