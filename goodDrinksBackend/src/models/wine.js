@@ -1,3 +1,4 @@
+// src/models/wine.js
 const mongoose = require('mongoose');
 
 const wineSchema = new mongoose.Schema({
@@ -15,8 +16,9 @@ const wineSchema = new mongoose.Schema({
   averageRating: { type: Number, default: 0, min: 0, max: 5 },
   imageUrl: { type: String, required: [true, 'La URL de la imagen es obligatoria'] }
 }, {
-  timestamps: true // Para saber cuándo se registró o actualizó un vino
+  timestamps: true
 });
 
 const Wine = mongoose.model('Wine', wineSchema);
+
 module.exports = Wine;

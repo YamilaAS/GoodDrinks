@@ -1,15 +1,17 @@
 const express = require('express');
-const ratingController = require('../controllers/rating');
 const router = express.Router();
-const verifyToken = require('../middlewares/verifyToken'); 
+const ratingController = require('../controllers/rating');
+const validate = require('../middlewares/validate');
+const verifyToken = require('../middlewares/verifyToken');
+const { createRatingSchema, updateRatingSchema } = require('../validationSchemas/rating');
 
-// Ruta Pública (Cualquiera puede ver los comentarios de un vino)
-router.get('/wine/:wineId', ratingController.getRatingsByWine); 
+// Ruta Pública
+router.get('/wine/:wineId', ratingController.getRatingsByWine);
 
-// Rutas Privadas (Requieren inicio de sesión)
-router.post('/', verifyToken, ratingController.createRating);
-router.put('/:id', verifyToken, ratingController.updateRating); 
-router.delete('/:id', verifyToken, ratingController.deleteRating); 
+// Rutas Protegidas
+router.post('/', verifyToken, validate(createRatingSchema), ratingController.createRating);
+router.put('/:id', verifyToken, validate(updateRatingSchema), ratingController.updateRating);
+router.delete('/:id', verifyToken, ratingController.deleteRating);
 router.post('/:id/like', verifyToken, ratingController.toggleLikeRating);
 
 module.exports = router;

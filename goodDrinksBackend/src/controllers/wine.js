@@ -1,4 +1,5 @@
 const wineService = require('../services/wineService');
+const Wine = require('../models/wine');
 
 exports.createWine = async (req, res, next) => {
   try {
