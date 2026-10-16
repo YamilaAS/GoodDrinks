@@ -48,6 +48,11 @@ app.use((req, res, next) => {
 });
 
 // --- Iniciar el Servidor ---
-app.listen(PORT, () => {
-  console.log(`📡 Servidor corriendo en http://localhost:${PORT}`);
-});
+// Asegúrate de que este sea el ÚNICO app.listen en todo el archivo
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => {
+        console.log(`📡 Servidor corriendo en http://localhost:${PORT}`);
+    });
+}
+
+module.exports = app;

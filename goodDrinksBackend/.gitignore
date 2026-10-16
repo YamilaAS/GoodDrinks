@@ -1,0 +1,14 @@
+# Node dependencies
+node_modules/
+npm-debug.log
+
+# Environment & Secrets
+.env
+.env.test
+.env.local
+
+# Testing & Coverage
+coverage/
+
+# OS metadata
+.DS_Store

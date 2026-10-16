@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: gooddrinks-backend
+    ports:
+      - "5003:5003"
+    # Mapea tu carpeta local con el contenedor para que si editas código en VS Code se actualice solo
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    # Le pasamos las variables de entorno de tu archivo .env
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
