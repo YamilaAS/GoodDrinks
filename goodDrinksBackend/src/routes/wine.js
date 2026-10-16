@@ -1,15 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const WineController = require('../controllers/wine');
-const verifyToken = require('../middlewares/verifyToken'); // ¡Corregido aquí!
+const wineController = require('../controllers/wine');
+const validate = require('../middlewares/validate');
+const verifyToken = require('../middlewares/verifyToken');
+const { createWineSchema, updateWineSchema } = require('../validationSchemas/wine');
 
-// Rutas Públicas (Cualquiera puede ver los vinos)
-router.get('/', WineController.getAllWines);
-router.get('/:id', WineController.getWineById);
+// Rutas Públicas
+router.get('/', wineController.getAllWines);
+router.get('/:id', wineController.getWineById);
 
-// Rutas Privadas (Solo usuarios autenticados pueden alterar el catálogo)
-router.post('/', verifyToken, WineController.createWine);
-router.put('/:id', verifyToken, WineController.updateWine);
-router.delete('/:id', verifyToken, WineController.deleteWine);
+// Rutas Protegidas
+router.post('/', verifyToken, validate(createWineSchema), wineController.createWine);
+router.put('/:id', verifyToken, validate(updateWineSchema), wineController.updateWine);
+router.delete('/:id', verifyToken, wineController.deleteWine);
 
 module.exports = router;
