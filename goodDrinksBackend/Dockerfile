@@ -1,20 +1,35 @@
-# 1. Imagen base oficial y ligera de Node.js (optimizada para x86 y ARM / Apple Silicon)
-FROM node:20-alpine
+# --- Stage 1: Dependencies & Development / Test ---
+FROM node:20-alpine AS dev
 
-# 2. Directorio de trabajo dentro del contenedor
 WORKDIR /usr/src/app
 
-# 3. Copiamos archivos de dependencias
 COPY package*.json ./
-
-# 4. Instalamos dependencias limpias
 RUN npm ci
 
-# 5. Copiamos el resto del código
 COPY . .
 
-# 6. Puerto en el que corre la aplicación
 EXPOSE 5003
 
-# 7. Ejecutar directamente con Node para mejor manejo de señales del OS
+CMD ["node", "src/server.js"]
+
+# --- Stage 2: Production Build ---
+FROM dev AS builder
+
+RUN npm prune --production
+
+# --- Stage 3: Production Runner ---
+FROM node:20-alpine AS runner
+
+WORKDIR /usr/src/app
+
+ENV NODE_ENV=production
+
+COPY --from=builder /usr/src/app/package*.json ./
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/src ./src
+
+USER node
+
+EXPOSE 5003
+
 CMD ["node", "src/server.js"]
