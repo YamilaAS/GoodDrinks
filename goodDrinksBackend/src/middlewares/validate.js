@@ -1,14 +1,13 @@
-const validate = (schema) => (req, res, next) => {
-    // Valida el cuerpo de la petición contra el esquema de Joi
-    const { error } = schema.validate(req.body, { abortEarly: false }); // abortEarly: false muestra todos los errores juntos si hay más de uno
-    
+// src/middlewares/validate.js
+const validate = (schema, target = 'body') => {
+  return (req, res, next) => {
+    const { error } = schema.validate(req[target], { abortEarly: false });
     if (error) {
-        // Devolvemos el error con la propiedad 'error' para mantener la consistencia del backend
-        return res.status(400).json({ 
-            error: error.details.map(detail => detail.message).join(', ') 
-        });
+      const errorMessage = error.details.map(detail => detail.message).join(', ');
+      return res.status(400).json({ error: errorMessage });
     }
     next();
+  };
 };
 
 module.exports = validate;
