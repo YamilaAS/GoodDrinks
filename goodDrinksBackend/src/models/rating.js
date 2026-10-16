@@ -28,7 +28,8 @@ const RatingSchema = new mongoose.Schema({
     }]
 }, {
     timestamps: true
-});
+}); 
+
 
 // Evitar que un mismo usuario califique el mismo vino más de una vez
 RatingSchema.index({ wine: 1, user: 1 }, { unique: true });
@@ -71,6 +72,8 @@ RatingSchema.post('findOneAndDelete', async function(doc) {
         await doc.constructor.calculateAverageRating(doc.wine);
     }
 });
+
+module.exports = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);
 
 const Rating = mongoose.model('Rating', RatingSchema);
 module.exports = Rating;

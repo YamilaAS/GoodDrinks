@@ -1,65 +1,81 @@
 const ratingRepository = require('../repositories/ratingRepository');
+const wineRepository = require('../repositories/wineRepository');
+const RatingDTO = require('../dtos/ratingDto');
 
 class RatingService {
   async createRating(userId, ratingData) {
-    const { wineId, rating, comments } = ratingData;
+    const { wineId, wine, rating, score, comment } = ratingData;
+    const targetWineId = wineId || wine;
+    const finalRating = rating !== undefined ? rating : score;
 
-    const existingRating = await ratingRepository.findByUserAndWine(userId, wineId);
+    // Verificar si ya existe calificación del usuario para este vino
+    const existingRating = await ratingRepository.findByUserAndWine
+      ? await ratingRepository.findByUserAndWine(userId, targetWineId)
+      : null;
+
     if (existingRating) {
-      const error = new Error('Ya has calificado este vino anteriormente.');
+      const error = new Error('Ya has calificado este vino');
       error.statusCode = 400;
       throw error;
     }
 
-    return await ratingRepository.create({
+    const newRating = await ratingRepository.create({
+      wine: targetWineId,
       user: userId,
-      wine: wineId,
-      rating,
-      comments
+      rating: finalRating,
+      score: finalRating,
+      comment
     });
+
+    // Actualizar promedio en el modelo Wine si el método existe
+    if (wineRepository.updateAverageRating) {
+      await wineRepository.updateAverageRating(targetWineId);
+    }
+
+    return RatingDTO.toResponse(newRating);
   }
 
   async getRatingsByWine(wineId) {
-    return await ratingRepository.findByWineId(wineId);
+    const ratings = await ratingRepository.findByWineId
+      ? await ratingRepository.findByWineId(wineId)
+      : await ratingRepository.findByWine(wineId);
+    return RatingDTO.toResponseList(ratings);
   }
 
   async updateRating(ratingId, userId, updateData) {
-    const existingRating = await ratingRepository.findByIdAndUser(ratingId, userId);
-    if (!existingRating) {
-      const error = new Error('Calificación no encontrada o no tienes permisos');
+    const updated = await ratingRepository.update(ratingId, userId, updateData);
+    if (!updated) {
+      const error = new Error('Reseña no encontrada o no autorizada');
       error.statusCode = 404;
       throw error;
     }
-
-    if (updateData.rating !== undefined) existingRating.rating = updateData.rating;
-    if (updateData.comments !== undefined) existingRating.comments = updateData.comments;
-
-    return await existingRating.save();
+    return RatingDTO.toResponse(updated);
   }
 
   async deleteRating(ratingId, userId) {
-    const deletedRating = await ratingRepository.deleteByIdAndUser(ratingId, userId);
-    if (!deletedRating) {
-      const error = new Error('Calificación no encontrada o no tienes permisos');
+    const deleted = await ratingRepository.delete(ratingId, userId);
+    if (!deleted) {
+      const error = new Error('Reseña no encontrada o no autorizada');
       error.statusCode = 404;
       throw error;
     }
-    return { message: 'Calificación eliminada de forma exitosa' };
+    return { message: 'Reseña eliminada exitosamente' };
   }
 
   async toggleLikeRating(ratingId, userId) {
-    const rating = await ratingRepository.findById(ratingId);
-    if (!rating) {
+    const updatedRating = await ratingRepository.toggleLike
+      ? await ratingRepository.toggleLike(ratingId, userId)
+      : await ratingRepository.findById(ratingId);
+
+    if (!updatedRating) {
       const error = new Error('Reseña no encontrada');
       error.statusCode = 404;
       throw error;
     }
 
-    const hasLiked = rating.likes.includes(userId);
-    await ratingRepository.toggleLike(ratingId, userId, hasLiked);
-
     return {
-      message: hasLiked ? 'Like removido' : 'Reseña cliqueada con Like con éxito'
+      message: 'Reseña cliqueada con Like con éxito',
+      rating: RatingDTO.toResponse(updatedRating)
     };
   }
 }

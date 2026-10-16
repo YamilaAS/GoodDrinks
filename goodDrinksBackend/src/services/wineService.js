@@ -1,26 +1,10 @@
 const wineRepository = require('../repositories/wineRepository');
+const WineDTO = require('../dtos/wineDto');
 
 class WineService {
   async createWine(wineData) {
-    const { name, type, winery, year, region, variety, imageUrl } = wineData;
-
-    // Forzamos que averageRating sea 0 en la creación
-    const safeWineData = {
-      name,
-      type,
-      winery,
-      year,
-      region,
-      variety,
-      imageUrl,
-      averageRating: 0
-    };
-
-    return await wineRepository.create(safeWineData);
-  }
-
-  async getAllWines(query) {
-    return await wineRepository.findAll(query);
+    const newWine = await wineRepository.create(wineData);
+    return WineDTO.toResponse(newWine);
   }
 
   async getWineById(id) {
@@ -30,21 +14,22 @@ class WineService {
       error.statusCode = 404;
       throw error;
     }
-    return wine;
+    return WineDTO.toResponse(wine);
+  }
+
+  async getAllWines(filters) {
+    const wines = await wineRepository.findAll(filters);
+    return WineDTO.toResponseList(wines);
   }
 
   async updateWine(id, updateData) {
-    // Evitamos la modificación manual del averageRating
-    const cleanData = { ...updateData };
-    delete cleanData.averageRating;
-
-    const updatedWine = await wineRepository.update(id, cleanData);
+    const updatedWine = await wineRepository.update(id, updateData);
     if (!updatedWine) {
       const error = new Error('Vino no encontrado');
       error.statusCode = 404;
       throw error;
     }
-    return updatedWine;
+    return WineDTO.toResponse(updatedWine);
   }
 
   async deleteWine(id) {

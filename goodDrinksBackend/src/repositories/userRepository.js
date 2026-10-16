@@ -37,6 +37,39 @@ class UserRepository {
   async delete(id) {
     return await User.findByIdAndDelete(id);
   }
+
+  // --- Métodos de Interacción Social ---
+  async addFollowing(userId, targetUserId) {
+    return await User.findByIdAndUpdate(
+      userId,
+      { $addToSet: { following: targetUserId } },
+      { new: true }
+    );
+  }
+
+  async addFollower(targetUserId, followerUserId) {
+    return await User.findByIdAndUpdate(
+      targetUserId,
+      { $addToSet: { followers: followerUserId } },
+      { new: true }
+    );
+  }
+
+  async removeFollowing(userId, targetUserId) {
+    return await User.findByIdAndUpdate(
+      userId,
+      { $pull: { following: targetUserId } },
+      { new: true }
+    );
+  }
+
+  async removeFollower(targetUserId, followerUserId) {
+    return await User.findByIdAndUpdate(
+      targetUserId,
+      { $pull: { followers: followerUserId } },
+      { new: true }
+    );
+  }
 }
 
 module.exports = new UserRepository();

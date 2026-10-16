@@ -1,4 +1,5 @@
 const userRepository = require('../repositories/userRepository');
+const UserDTO = require('../dtos/userDto');
 const jwt = require('jsonwebtoken');
 
 class UserService {
@@ -11,10 +12,9 @@ class UserService {
     }
 
     const newUser = await userRepository.create({ username, email, password });
-    const userObject = newUser.toObject();
-    delete userObject.password;
     
-    return userObject;
+    // Delegamos el formateo y sanitización al DTO
+    return UserDTO.toResponse(newUser);
   }
 
   async loginUser({ email, password }) {
@@ -43,11 +43,7 @@ class UserService {
 
     return {
       token,
-      user: {
-        id: user._id,
-        username: user.username,
-        email: user.email
-      }
+      user: UserDTO.toResponse(user)
     };
   }
 
@@ -58,11 +54,13 @@ class UserService {
       error.statusCode = 404;
       throw error;
     }
-    return user;
+
+    return UserDTO.toResponse(user);
   }
 
   async getAllUsers() {
-    return await userRepository.findAll();
+    const users = await userRepository.findAll();
+    return UserDTO.toResponseList(users);
   }
 
   async updateUser(id, updateData) {
@@ -73,9 +71,7 @@ class UserService {
       throw error;
     }
     
-    const userObject = updatedUser.toObject ? updatedUser.toObject() : updatedUser;
-    delete userObject.password;
-    return userObject;
+    return UserDTO.toResponse(updatedUser);
   }
 
   async deleteUser(id) {
@@ -85,6 +81,7 @@ class UserService {
       error.statusCode = 404;
       throw error;
     }
+
     return { message: 'Usuario eliminado exitosamente' };
   }
 }
