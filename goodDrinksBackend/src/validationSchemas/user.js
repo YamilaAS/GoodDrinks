@@ -1,45 +1,38 @@
-const request = require('supertest');
-const app = require('../index'); // Asegúrate de que apunte bien a tu index.js principal
-const mongoose = require('mongoose');
+const Joi = require('joi');
 
-describe('🧪 Pruebas de Autenticación de Usuarios', () => {
-  const emailTest = `tester_${Date.now()}@gooddrinks.com`;
-  const passwordTest = 'Password123!';
-
-  afterAll(async () => {
-    await mongoose.connection.close();
-  });
-
-  // --- 1. TEST DE REGISTRO ---
-  it('🚀 Debería registrar un nuevo usuario con éxito', async () => {
-    const respuesta = await request(app)
-      .post('/api/users/register') 
-      .send({
-        name: 'Usuario Test',     // Por si lo pide tu modelo de Mongoose
-        username: 'UsuarioTest', // Para que Joi no tire error 400
-        email: emailTest,
-        password: passwordTest
-      });
-
-    // Imprime el cuerpo del error si llega a fallar con 500 para saber qué pasó exactamente
-    if (respuesta.statusCode === 500) {
-      console.log('🔴 Error interno del servidor:', respuesta.body);
-    }
-
-    expect([200, 201]).toContain(respuesta.statusCode);
-  });
-
-  // --- 2. TEST DE LOGIN EXITOSO ---
-  it('🔑 Debería iniciar sesión con éxito y devolver un JWT', async () => {
-    const respuesta = await request(app)
-      .post('/api/users/login') 
-      .send({
-        email: emailTest,
-        password: passwordTest
-      });
-
-    expect(respuesta.statusCode).toBe(200);
-    expect(respuesta.body).toBeDefined();
-  });
-
+const registerSchema = Joi.object({
+  username: Joi.string().alphanum().min(3).max(30).required().messages({
+    'string.empty': 'El nombre de usuario es obligatorio',
+    'string.min': 'El nombre de usuario debe tener al menos 3 caracteres'
+  }),
+  email: Joi.string().email().required().messages({
+    'string.email': 'Debe ingresar un correo electrónico válido',
+    'string.empty': 'El correo electrónico es obligatorio'
+  }),
+  password: Joi.string().min(6).required().messages({
+    'string.min': 'La contraseña debe tener al menos 6 caracteres',
+    'string.empty': 'La contraseña es obligatoria'
+  })
 });
+
+const loginSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Debe ingresar un correo electrónico válido',
+    'string.empty': 'El correo electrónico es obligatorio'
+  }),
+  password: Joi.string().required().messages({
+    'string.empty': 'La contraseña es obligatoria'
+  })
+});
+
+const updateUserSchema = Joi.object({
+  username: Joi.string().alphanum().min(3).max(30).optional(),
+  email: Joi.string().email().optional(),
+  password: Joi.string().min(6).optional()
+});
+
+module.exports = {
+  registerSchema,
+  loginSchema,
+  updateUserSchema
+};

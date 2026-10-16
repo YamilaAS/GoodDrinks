@@ -1,13 +1,24 @@
 const request = require('supertest');
-const app = require('../index');
+const app = require('../../src/index');
 const mongoose = require('mongoose');
+const User = require('../../src/models/user');
 
 describe('🧪 Pruebas de Autenticación de Usuarios', () => {
-  // Ahora sí, definimos las variables globales del bloque de tests
-  const emailTest = `tester_${Date.now()}@gooddrinks.com`;
+  const timestamp = Date.now();
+  // Alfanumérico puro sin guiones para cumplir con Joi .alphanum()
+  const usernameTest = `user${timestamp}`; 
+  const emailTest = `tester_${timestamp}@gooddrinks.com`;
   const passwordTest = 'Password123!';
 
+  beforeAll(async () => {
+    const mongoUri = process.env.MONGODB_URI || 'mongodb://mongo:27017/gooddrinks';
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(mongoUri);
+    }
+  });
+
   afterAll(async () => {
+    await User.deleteMany({ email: { $regex: /@gooddrinks\.com$/ } });
     await mongoose.connection.close();
   });
 
@@ -16,10 +27,14 @@ describe('🧪 Pruebas de Autenticación de Usuarios', () => {
     const respuesta = await request(app)
       .post('/api/users/register') 
       .send({
-        name: 'Usuario Test',
+        username: usernameTest,
         email: emailTest,
         password: passwordTest
       });
+
+    if (respuesta.statusCode !== 200 && respuesta.statusCode !== 201) {
+      console.log('🔴 Error en validación/registro:', respuesta.body);
+    }
 
     expect([200, 201]).toContain(respuesta.statusCode);
   });
@@ -34,7 +49,6 @@ describe('🧪 Pruebas de Autenticación de Usuarios', () => {
       });
 
     expect(respuesta.statusCode).toBe(200);
-    expect(respuesta.body).toBeDefined();
+    expect(respuesta.body).toHaveProperty('token');
   });
-
 });
