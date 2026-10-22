@@ -3,12 +3,12 @@ const mongoose = require('mongoose');
 const RatingSchema = new mongoose.Schema({
     user: { 
         type: mongoose.Schema.Types.ObjectId, 
-        ref: 'User', // Debe coincidir exactamente con el nombre en mongoose.model('User', ...)
+        ref: 'User',
         required: [true, 'El usuario es obligatorio'] 
     },
     wine: { 
         type: mongoose.Schema.Types.ObjectId, 
-        ref: 'Wine', // ¡Corregido! "Wine" con mayúscula para coincidir con tu modelo
+        ref: 'Wine',
         required: [true, 'El vino es obligatorio'] 
     },
     rating: { 
@@ -30,11 +30,10 @@ const RatingSchema = new mongoose.Schema({
     timestamps: true
 }); 
 
-
 // Evitar que un mismo usuario califique el mismo vino más de una vez
 RatingSchema.index({ wine: 1, user: 1 }, { unique: true });
 
-// --- MÉTODOS ESTÁTICOS: Calcular Promedio de Calificaciones ---
+// --- Calcular Promedio de Calificaciones ---
 RatingSchema.statics.calculateAverageRating = async function(wineId) {
     const stats = await this.aggregate([
         { $match: { wine: wineId } },
@@ -49,11 +48,11 @@ RatingSchema.statics.calculateAverageRating = async function(wineId) {
     try {
         if (stats.length > 0) {
             await mongoose.model('Wine').findByIdAndUpdate(wineId, {
-                averageRating: Math.round(stats[0].avgRating * 10) / 10 // Redondea a 1 decimal (ej: 4.3)
+                averageRating: Math.round(stats[0].avgRating * 10) / 10
             });
         } else {
             await mongoose.model('Wine').findByIdAndUpdate(wineId, {
-                averageRating: 0 // Si no hay reseñas, vuelve a 0
+                averageRating: 0
             });
         }
     } catch (error) {
@@ -74,6 +73,3 @@ RatingSchema.post('findOneAndDelete', async function(doc) {
 });
 
 module.exports = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);
-
-const Rating = mongoose.model('Rating', RatingSchema);
-module.exports = Rating;

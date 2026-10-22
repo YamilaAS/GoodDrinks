@@ -6,14 +6,14 @@ const userSchema = new mongoose.Schema({
         type: String, 
         required: [true, 'El nombre de usuario es obligatorio'], 
         unique: true,
-        trim: true // Elimina espacios en blanco al inicio y final
+        trim: true 
     },
     email: { 
         type: String, 
         required: [true, 'El correo electrónico es obligatorio'], 
         unique: true,
         trim: true,
-        lowercase: true, // Guarda siempre en minúsculas para evitar duplicados como Test@test.com y test@test.com
+        lowercase: true, 
         match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Por favor, ingresa un correo válido']
     },
     password: { 
@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema({
         ref: 'User'
     }]
 }, {
-    timestamps: true // Crea automáticamente los campos createdAt y updatedAt (Muy útil para auditoría)
+    timestamps: true // Crea automáticamente los campos createdAt y updatedAt 
 });
 
 // Middleware de Mongoose: Encriptar contraseña antes de guardar el usuario
@@ -47,7 +47,7 @@ userSchema.pre('save', async function(next) {
     }
 });
 
-// Método auxiliar para comparar contraseñas en el login
+// Método para comparar contraseñas en el login
 userSchema.methods.comparePassword = async function(candidatePassword) {
     return await bcrypt.compare(candidatePassword, this.password);
 };

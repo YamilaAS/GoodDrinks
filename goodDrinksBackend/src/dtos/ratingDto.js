@@ -15,12 +15,16 @@ class RatingDTO {
       ? WineDTO.toResponse(raw.wine)
       : raw.wine;
 
+    // 👈 AQUÍ FALTABA DECLARAR LA VARIABLE 'text'
+    const text = raw.comments || raw.comment || '';
+
     return {
       _id: id,
       id,
       rating: raw.rating ?? raw.score,
       score: raw.score ?? raw.rating,
-      comment: raw.comment,
+      comment: text,   // Devuelve el texto para el frontend
+      comments: text,  // Compatibilidad con plural
       likes: raw.likes || [],
       user,
       wine,

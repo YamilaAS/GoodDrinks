@@ -36,7 +36,7 @@ class RatingRepository {
     return await Rating.findByIdAndUpdate(ratingId, update, { new: true });
   }
 
-  // Método dedicado para obtener el feed de los usuarios seguidos
+  // obtener el feed de los usuarios seguidos
   async getFeed(followingIds) {
     return await Rating.find({ user: { $in: followingIds } })
       .populate('wine')

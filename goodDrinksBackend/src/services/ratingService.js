@@ -4,9 +4,12 @@ const RatingDTO = require('../dtos/ratingDto');
 
 class RatingService {
   async createRating(userId, ratingData) {
-    const { wineId, wine, rating, score, comment } = ratingData;
+    const { wineId, wine, rating, score, comment, comments } = ratingData;
     const targetWineId = wineId || wine;
     const finalRating = rating !== undefined ? rating : score;
+
+    // Extraemos el texto del comentario
+    const finalComment = comment || comments || '';
 
     // Verificar si ya existe calificación del usuario para este vino
     const existingRating = await ratingRepository.findByUserAndWine
@@ -24,7 +27,7 @@ class RatingService {
       user: userId,
       rating: finalRating,
       score: finalRating,
-      comment
+      comments: finalComment // 👈 CORREGIDO: 'comments' en plural para coincidir con Mongoose Schema
     });
 
     // Actualizar promedio en el modelo Wine si el método existe

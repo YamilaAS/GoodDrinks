@@ -15,7 +15,7 @@ CMD ["node", "src/server.js"]
 # --- Stage 2: Production Build ---
 FROM dev AS builder
 
-RUN npm prune --production
+RUN npm prune --omit=dev
 
 # --- Stage 3: Production Runner ---
 FROM node:20-alpine AS runner

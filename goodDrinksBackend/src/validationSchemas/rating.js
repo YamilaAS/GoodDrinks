@@ -12,12 +12,14 @@ const createRatingSchema = Joi.object({
   }),
   comments: Joi.string().max(500).allow('').optional().messages({
     'string.max': 'El comentario no puede superar los 500 caracteres'
-  })
+  }),
+  comment: Joi.string().max(500).allow('').optional(),
 });
 
 const updateRatingSchema = Joi.object({
   rating: Joi.number().min(1).max(5).optional(),
-  comments: Joi.string().max(500).allow('').optional()
+  comments: Joi.string().max(500).allow('').optional(),
+  comment: Joi.string().max(500).allow('').optional()
 });
 
 module.exports = {

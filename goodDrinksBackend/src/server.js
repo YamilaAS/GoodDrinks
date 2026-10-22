@@ -7,7 +7,7 @@ const server = app.listen(PORT, () => {
   console.log(`📡 Servidor corriendo en http://localhost:${PORT}`);
 });
 
-// Manejo de apagado limpio (Graceful Shutdown)
+// Cerrar conexions 
 process.on('SIGTERM', () => {
   console.log('🛑 Señal SIGTERM recibida: Cerrando servidor HTTP...');
   server.close(() => {

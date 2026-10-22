@@ -21,8 +21,7 @@ const shelfSchema = new mongoose.Schema({
     timestamps: true 
 });
 
-// Índice compuesto: Un usuario no puede tener el mismo vino dos veces en sus estanterías.
-// Si quiere cambiar de estado (de 'Por probar' a 'Ya tomados'), se actualiza el documento existente.
+
 shelfSchema.index({ user: 1, wine: 1 }, { unique: true });
 
 const Shelf = mongoose.model('Shelf', shelfSchema);

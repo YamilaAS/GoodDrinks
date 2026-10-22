@@ -13,7 +13,7 @@ const verifyToken = (req, res, next) => {
     return res.status(401).json({ error: 'Formato de token inválido' });
   }
 
-  // Agregamos el fallback por si no existen las variables de entorno en tests
+
   const secret = process.env.JWT_SECRET || process.env.TOKEN_API_VINOS || 'dev_jwt_secret_key_123';
 
   if (!secret) {
