@@ -1,182 +1,194 @@
-import { useState, useEffect, useCallback } from 'react';
+// src/components/WineCard.jsx
+import { useState } from 'react';
 import StarRating from './StarRating';
-import { wineService } from '../services/wineService';
 
-export default function WineCard({ wine, onSelectWine, onWineUpdated }) {
-  const [showReviewForm, setShowReviewForm] = useState(false);
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // Estado local para almacenar las reseñas reales de este vino
-  const [reviews, setReviews] = useState([]);
+export default function WineCard({ wine, currentUserId, isDarkMode, onSelect, onCalificar }) {
+  const [favorite, setFavorite] = useState(false);
+  const [cavaStatus, setCavaStatus] = useState('por_probar');
 
   const defaultImage =
-    "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=400";
+    'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=400';
 
-  const wineId = wine._id || wine.id;
+  const wineName = wine.name || wine.nombre || 'Vino Sin Nombre';
+  const winery = wine.winery || wine.bodega || 'Bodega Reserva';
+  const wineType = (wine.type || wine.tipo || 'Tinto').toLowerCase();
 
-  // Cargar reseñas reales desde el backend para este vino
-  const fetchCardReviews = useCallback(async () => {
-    if (!wineId) return;
-    try {
-      const data = await wineService.getReviewsByWine(wineId);
-      const reviewsList = Array.isArray(data) ? data : data.ratings || data.reviews || data.data || [];
-      setReviews(reviewsList);
-    } catch (err) {
-      console.error('Error al obtener reseñas de la tarjeta:', err);
-    }
-  }, [wineId]);
+  const variety =
+    wine.variety ||
+    wine.varietal ||
+    wine.cepa ||
+    wine.uva ||
+    wine.type ||
+    wine.tipo ||
+    'Varietal Blend';
 
-  useEffect(() => {
-    fetchCardReviews();
-  }, [fetchCardReviews]);
+  const region = wine.region || wine.ubicacion || wine.origen || 'Mendoza, Argentina';
+  const year = wine.year || wine.vintage || wine.cosecha || new Date().getFullYear();
 
-  // Calcular el promedio basado en el estado local de reseñas
-  const averageRating =
-    reviews.length > 0
-      ? (
-          reviews.reduce((acc, r) => acc + Number(r.rating || r.score || 0), 0) /
-          reviews.length
-        ).toFixed(1)
-      : 0;
+  const averageRating = Number(wine.rating || wine.averageRating || 0).toFixed(1);
+  const reviewsList = wine.reviews || wine.ratings || [];
+  const totalReviews = wine.numReviews || wine.reviewsCount || reviewsList.length;
 
-  const handleSubmitReview = async (e) => {
-    e.preventDefault();
-    if (rating === 0) {
-      setError('Por favor, selecciona al menos 1 estrella.');
-      return;
-    }
+  const userReview = reviewsList.find((rev) => {
+    if (!currentUserId || !rev) return false;
+    const authorId = rev.user?._id || rev.user?.id || rev.userId?._id || rev.userId || rev.user;
+    return String(authorId) === String(currentUserId);
+  });
 
-    try {
-      setLoading(true);
-      setError('');
-      
-      // Enviar reseña a POST /api/ratings
-      await wineService.addReview(wineId, { rating, comment });
+  const userRatingValue = userReview?.rating ?? userReview?.score ?? wine.userRating ?? null;
 
-      // Limpiar formulario y ocultarlo
-      setComment('');
-      setRating(0);
-      setShowReviewForm(false);
-
-      // 1. Recargar las reseñas locales para actualizar las estrellas de la tarjeta inmediatamente
-      await fetchCardReviews();
-
-      // 2. Si hay callback general, notificar al Dashboard
-      if (onWineUpdated) {
-        onWineUpdated();
-      }
-    } catch (err) {
-      console.error('Error al enviar la reseña:', err);
-      setError('No se pudo guardar la reseña. Inténtalo de nuevo.');
-    } finally {
-      setLoading(false);
-    }
+  // Badges por Tipo de Vino
+  const typeBadgeStyles = {
+    tinto: 'bg-[#FFEBEF] text-[#8B263E] border-[#8B263E]/30',
+    blanco: 'bg-[#FEFCE8] text-[#854D0E] border-[#854D0E]/30',
+    rosado: 'bg-[#FDF2F8] text-[#9D174D] border-[#9D174D]/30',
+    espumante: 'bg-[#F0FDF4] text-[#166534] border-[#166534]/30',
   };
 
+  const badgeStyle = typeBadgeStyles[wineType] || typeBadgeStyles.tinto;
+
+  // Modos de Color de la Tarjeta
+  const cardContainerStyle = isDarkMode
+    ? 'bg-[#1E1218] border-[#3A222F] text-[#F5F5F4] shadow-2xl hover:border-[#6B1D34]'
+    : 'bg-[#FFFFFF] border-[#E8E2D5] text-[#1C1917] shadow-sm hover:shadow-xl hover:border-[#4A1222]/30';
+
+  const imageAreaStyle = isDarkMode ? 'bg-[#120A0E]/80' : 'bg-[#F9F6F0]';
+
+  // 💡 Texto de Cepa y Región (Legibilidad Garantizada)
+  const metaTextStyle = isDarkMode ? 'text-[#F5F5F4]/80' : 'text-[#2C0B14] font-semibold';
+
+  // Desplegable de Cava
+  const selectStyle = isDarkMode
+    ? 'bg-[#120A0E] border-[#3A222F] text-[#F5F5F4] focus:border-[#6B1D34]'
+    : 'bg-[#F9F6F0] border-[#E8E2D5] text-[#1C1917] font-semibold focus:border-[#4A1222]';
+
+  const optionStyle = isDarkMode ? 'bg-[#1E1218] text-[#F5F5F4]' : 'bg-[#FFFFFF] text-[#1C1917]';
+
   return (
-    <div className="bg-slate-800 border border-slate-700/60 rounded-2xl p-5 shadow-lg hover:border-slate-600 transition-all flex flex-col justify-between">
-      <div>
-        {/* Imagen de la Botella */}
-        <div className="w-full h-48 bg-slate-900/60 rounded-xl mb-4 p-2 flex items-center justify-center overflow-hidden border border-slate-700/30">
-          <img
-            src={wine.imageUrl || wine.image || defaultImage}
-            alt={wine.name || wine.nombre}
-            className="h-full object-contain hover:scale-105 transition-transform duration-300"
-          />
-        </div>
-
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <h3 className="text-lg font-bold text-slate-100 line-clamp-1">
-            {wine.name || wine.nombre}
-          </h3>
-          <span className="px-2.5 py-1 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full whitespace-nowrap">
-            {wine.winery || wine.bodega || 'Reserva'}
+    <div className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between p-4 group ${cardContainerStyle}`}>
+      
+      {/* 1. Imagen con Badges y Favorito */}
+      <div className={`relative w-full h-56 rounded-2xl overflow-hidden flex items-center justify-center p-4 transition-colors ${imageAreaStyle}`}>
+        <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5 items-start">
+          <span className={`px-3 py-1 rounded-md text-[10px] font-bold tracking-wider uppercase border shadow-2xs ${badgeStyle}`}>
+            {wineType}
+          </span>
+          <span className="px-3 py-1 rounded-md text-[10px] font-bold text-[#F5F5F4] bg-[#2C0B14]/90 backdrop-blur-md">
+            Cosecha {year}
           </span>
         </div>
 
-        {/* Resumen de Calificación dinámico */}
-        <div className="flex items-center space-x-2 mb-3">
-          <StarRating rating={Number(averageRating)} size="sm" />
-          <span className="text-xs font-bold text-slate-300">
-            {averageRating > 0 ? averageRating : 'Sin notas'}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setFavorite(!favorite);
+          }}
+          className="absolute top-3 right-3 z-10 w-9 h-9 bg-[#FFFFFF]/90 dark:bg-[#1E1218]/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform cursor-pointer border border-[#E8E2D5]/60 dark:border-[#3A222F]"
+        >
+          <span className={`text-base ${favorite ? 'text-[#8B263E]' : 'text-[#78716C]'}`}>
+            {favorite ? '❤️' : '🤍'}
           </span>
-          <span className="text-xs text-slate-500">
-            ({reviews.length} {reviews.length === 1 ? 'reseña' : 'reseñas'})
-          </span>
-        </div>
+        </button>
 
-        <p className="text-slate-400 text-sm mb-4 line-clamp-2">
-          {wine.description || wine.descripcion || 'Sin descripción disponible.'}
-        </p>
+        <img
+          src={wine.imageUrl || wine.image || defaultImage}
+          alt={wineName}
+          className="h-full object-contain drop-shadow-md group-hover:scale-105 transition-transform duration-300 cursor-pointer"
+          onClick={() => onSelect && onSelect(wine)}
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = defaultImage;
+          }}
+        />
       </div>
 
-      {/* Pie de Tarjeta y Acciones */}
-      <div className="space-y-3 pt-3 border-t border-slate-700/50">
-        <div className="flex items-center justify-between text-sm">
-          <div>
-            <span className="text-xs text-slate-500 uppercase tracking-wider block">Varietal</span>
-            <span className="font-medium text-slate-300">{wine.varietal || wine.type || 'Tinto'}</span>
+      {/* 2. Información del Vino */}
+      <div className="pt-4 space-y-3 flex-1 flex flex-col justify-between">
+        <div className="space-y-1">
+          <span className="text-[11px] font-extrabold tracking-wider text-[#8B263E] dark:text-[#D4AF37] uppercase block">
+            {winery}
+          </span>
+
+          <h3
+            onClick={() => onSelect && onSelect(wine)}
+            className="text-lg font-bold font-serif leading-snug line-clamp-1 hover:text-[#6B1D34] dark:hover:text-[#F3C623] transition-colors cursor-pointer"
+          >
+            {wineName}
+          </h3>
+
+          {/* Cepa y Región Corregidas */}
+          <div className={`pt-1 space-y-1 text-xs ${metaTextStyle}`}>
+            <div className="flex items-center gap-1.5">
+              <span>🍇</span>
+              <span className="capitalize">{variety}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px]">
+              <span>🌍</span>
+              <span className="truncate">{region}</span>
+            </div>
           </div>
-          <div className="text-right">
-            <span className="text-xs text-slate-500 uppercase tracking-wider block">Precio</span>
-            <span className="text-base font-bold text-amber-400">
-              ${wine.price || wine.precio || '0.00'}
+        </div>
+
+        {/* 3. Estrellas + Evaluación */}
+        <div className="pt-2 border-t border-[#E8E2D5] dark:border-[#3A222F] flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <StarRating rating={Number(averageRating)} size="sm" />
+            <span className="text-xs font-bold text-[#D4AF37]">
+              {averageRating > 0 ? averageRating : 'S/N'}
+            </span>
+            
+            <button
+              type="button"
+              onClick={() => onSelect && onSelect(wine)}
+              className="text-[10px] text-[#78716C] dark:text-[#F5F5F4]/60 hover:underline ml-0.5 cursor-pointer"
+            >
+              ({totalReviews} opiniones)
+            </button>
+          </div>
+
+          {userRatingValue !== null && userRatingValue !== undefined ? (
+            <div className="text-[11px] text-right">
+              <span className="text-[#78716C] dark:text-[#F5F5F4]/60 block text-[9px] uppercase font-bold">Mi Nota:</span>
+              <span className="text-[#D4AF37] font-extrabold text-xs">
+                {userRatingValue} ★
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onCalificar) onCalificar(wine);
+              }}
+              className="text-[11px] font-bold text-[#4A1222] dark:text-[#D4AF37] hover:bg-[#FFEBEF] dark:hover:bg-[#3A222F] bg-[#F9F6F0] dark:bg-[#120A0E] px-2.5 py-1.5 rounded-lg border border-[#4A1222]/20 dark:border-[#D4AF37]/40 transition-colors cursor-pointer"
+            >
+              <span>+ Calificar</span>
+            </button>
+          )}
+        </div>
+
+        {/* 4. Selector Cava */}
+        <div className="pt-2">
+          <span className="text-[9px] font-bold text-[#78716C] dark:text-[#F5F5F4]/60 uppercase tracking-wider block mb-1">
+            ESTADO EN MI CAVA:
+          </span>
+          <div className="relative">
+            <select
+              value={cavaStatus}
+              onChange={(e) => setCavaStatus(e.target.value)}
+              className={`w-full border rounded-xl px-3 py-2 text-xs font-bold appearance-none focus:outline-none cursor-pointer transition-colors ${selectStyle}`}
+            >
+              <option value="por_probar" className={optionStyle}>📍 Por Probar</option>
+              <option value="en_cava" className={optionStyle}>🍷 En mi Cava</option>
+              <option value="consumido" className={optionStyle}>✅ Consumido</option>
+            </select>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#78716C] text-[10px]">
+              ▼
             </span>
           </div>
         </div>
 
-        {/* Botones de Acción */}
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => onSelectWine && onSelectWine(wine)}
-            className="flex-1 py-2 px-3 text-xs font-semibold text-slate-200 hover:text-white bg-slate-700/50 hover:bg-slate-700 border border-slate-600/50 rounded-xl transition-all"
-          >
-            👁️ Ver Reseñas
-          </button>
-
-          <button
-            onClick={() => setShowReviewForm(!showReviewForm)}
-            className="flex-1 py-2 px-3 text-xs font-semibold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-xl transition-all"
-          >
-            ✍️ Calificar
-          </button>
-        </div>
-
-        {/* Formulario de Reseña Desplegable */}
-        {showReviewForm && (
-          <form onSubmit={handleSubmitReview} className="p-3 bg-slate-900/90 border border-amber-500/30 rounded-xl space-y-3 animate-fadeIn mt-2">
-            {error && (
-              <p className="text-xs text-rose-400">{error}</p>
-            )}
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Tu puntuación</label>
-              <StarRating rating={rating} onRatingChange={setRating} size="lg" />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Nota de cata o comentario</label>
-              <textarea
-                rows="2"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="¿Qué te pareció este vino? Ej: Buena acidez, ideal para carnes..."
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500 resize-none"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-1.5 text-xs font-bold text-slate-950 bg-amber-500 hover:bg-amber-400 rounded-lg transition-all disabled:opacity-50"
-            >
-              {loading ? 'Guardando...' : 'Publicar Reseña'}
-            </button>
-          </form>
-        )}
       </div>
     </div>
   );

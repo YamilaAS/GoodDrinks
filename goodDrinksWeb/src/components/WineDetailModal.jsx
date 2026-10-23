@@ -1,15 +1,26 @@
-// src/components/WineDetailModal.jsx
+
 import { useEffect, useState } from 'react';
 import StarRating from './StarRating';
 import { wineService } from '../services/wineService';
 
-export default function WineDetailModal({ wine, isOpen, onClose, currentUserId, onSelectUser }) {
+export default function WineDetailModal({
+  wine,
+  isOpen,
+  onClose,
+  currentUserId,
+  onSelectUser,
+}) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [editingReviewId, setEditingReviewId] = useState(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editComment, setEditComment] = useState('');
+  const [savingReview, setSavingReview] = useState(false);
+  const [deletingReviewId, setDeletingReviewId] = useState(null);
 
   const defaultImage =
-    "https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=400";
+    'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=400';
 
   useEffect(() => {
     if (!isOpen || !wine) return;
@@ -18,11 +29,14 @@ export default function WineDetailModal({ wine, isOpen, onClose, currentUserId, 
       try {
         setLoading(true);
         setError('');
+
         const wineId = wine._id || wine.id;
         const data = await wineService.getReviewsByWine(wineId);
-        
-        // Manejar respuesta si viene como array directo o envuelta en un objeto
-        const reviewsList = Array.isArray(data) ? data : data.ratings || data.reviews || data.data || [];
+
+        const reviewsList = Array.isArray(data)
+          ? data
+          : data?.ratings || data?.reviews || data?.data || [];
+
         setReviews(reviewsList);
       } catch (err) {
         console.error('Error al cargar reseñas:', err);
@@ -35,75 +49,171 @@ export default function WineDetailModal({ wine, isOpen, onClose, currentUserId, 
     fetchReviews();
   }, [isOpen, wine]);
 
-  // Manejador del estado para dar Likes en cada reseña
   const handleLike = async (ratingId) => {
     try {
       await wineService.toggleLike(ratingId);
+
       setReviews((prev) =>
-        prev.map((r) => {
-          const rId = r._id || r.id;
-          if (rId === ratingId) {
-            const currentLikes = r.likes || [];
-            const hasLiked = currentLikes.includes(currentUserId);
-            const updatedLikes = hasLiked
-              ? currentLikes.filter((id) => id !== currentUserId)
-              : [...currentLikes, currentUserId];
-            return { ...r, likes: updatedLikes };
-          }
-          return r;
+        prev.map((review) => {
+          const reviewId = review._id || review.id;
+
+          if (String(reviewId) !== String(ratingId)) return review;
+
+          const currentLikes = review.likes || [];
+          const hasLiked = currentLikes.some(
+            (id) => String(id?._id || id?.id || id) === String(currentUserId)
+          );
+
+          const updatedLikes = hasLiked
+            ? currentLikes.filter(
+                (id) =>
+                  String(id?._id || id?.id || id) !== String(currentUserId)
+              )
+            : [...currentLikes, currentUserId];
+
+          return { ...review, likes: updatedLikes };
         })
       );
     } catch (err) {
       console.error('Error al procesar el like:', err);
+      setError('No se pudo procesar el like.');
+    }
+  };
+
+  const startEditing = (review) => {
+    setEditingReviewId(String(review._id || review.id));
+    setEditRating(Number(review.rating ?? review.score ?? 5));
+    setEditComment(review.comment ?? review.comments ?? '');
+    setError('');
+  };
+
+  const cancelEditing = () => {
+    setEditingReviewId(null);
+    setEditRating(5);
+    setEditComment('');
+    setError('');
+  };
+
+  const handleUpdateReview = async (ratingId) => {
+    try {
+      setSavingReview(true);
+      setError('');
+
+      await wineService.updateReview(ratingId, {
+        rating: Number(editRating),
+        comment: editComment.trim(),
+        comments: editComment.trim(),
+      });
+
+      const wineId = wine._id || wine.id;
+      const data = await wineService.getReviewsByWine(wineId);
+
+      const reviewsList = Array.isArray(data)
+        ? data
+        : data?.ratings || data?.reviews || data?.data || [];
+
+      setReviews(reviewsList);
+      cancelEditing();
+    } catch (err) {
+      console.error('Error al actualizar la reseña:', err);
+
+      const backendMsg =
+        err?.response?.data?.error || err?.response?.data?.message;
+
+      setError(backendMsg || 'No se pudo actualizar la reseña.');
+    } finally {
+      setSavingReview(false);
+    }
+  };
+
+  const handleDeleteReview = async (ratingId) => {
+    const confirmed = window.confirm(
+      '¿Estás seguro de que querés eliminar esta reseña? Esta acción no se puede deshacer.'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeletingReviewId(ratingId);
+      setError('');
+
+      await wineService.deleteReview(ratingId);
+
+      setReviews((prev) =>
+        prev.filter(
+          (review) =>
+            String(review._id || review.id) !== String(ratingId)
+        )
+      );
+
+      if (String(editingReviewId) === String(ratingId)) {
+        cancelEditing();
+      }
+    } catch (err) {
+      console.error('Error al eliminar la reseña:', err);
+
+      const backendMsg =
+        err?.response?.data?.error || err?.response?.data?.message;
+
+      setError(backendMsg || 'No se pudo eliminar la reseña.');
+    } finally {
+      setDeletingReviewId(null);
     }
   };
 
   if (!isOpen || !wine) return null;
 
-  // Calcular promedio con las reseñas devueltas por la base de datos
   const averageRating =
     reviews.length > 0
       ? (
-          reviews.reduce((acc, r) => acc + (r.rating || r.score || 0), 0) /
-          reviews.length
+          reviews.reduce(
+            (acc, review) =>
+              acc + Number(review.rating ?? review.score ?? 0),
+            0
+          ) / reviews.length
         ).toFixed(1)
-      : wine.rating || 0;
+      : Number(wine.averageRating ?? wine.rating ?? 0).toFixed(1);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden my-8">
-        
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#120A0E]/80 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-[#FFFFFF] dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F] text-[#1C1917] dark:text-[#F5F5F4] rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+
         {/* Cabecera */}
-        <div className="p-5 border-b border-slate-700/60 flex items-center justify-between">
+        <div className="p-5 border-b border-[#E8E2D5] dark:border-[#3A222F] bg-[#F9F6F0] dark:bg-[#120A0E] flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <span className="text-xl">🍷</span>
-            <h2 className="text-lg font-bold text-slate-100">Ficha Técnica & Reseñas</h2>
+            <h2 className="text-lg font-bold font-serif text-[#4A1222] dark:text-[#F5F5F4]">
+              Ficha Técnica & Reseñas
+            </h2>
           </div>
+
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-200 text-lg font-bold px-2 rounded-lg transition-colors"
+            className="text-[#78716C] hover:text-[#1C1917] dark:hover:text-[#F5F5F4] text-lg font-bold px-2 rounded-lg transition-colors cursor-pointer"
           >
             ✕
           </button>
         </div>
 
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-          {/* Ficha Principal del Vino */}
+
+          {/* Detalle Principal */}
           <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">
-            <div className="w-36 h-52 bg-slate-900/80 rounded-xl p-3 flex items-center justify-center border border-slate-700/40 shrink-0">
+            <div className="w-36 h-52 bg-[#F9F6F0] dark:bg-[#120A0E] rounded-2xl p-3 flex items-center justify-center border border-[#E8E2D5] dark:border-[#3A222F] shrink-0">
               <img
                 src={wine.imageUrl || wine.image || defaultImage}
                 alt={wine.name || wine.nombre}
-                className="h-full object-contain"
+                className="h-full object-contain drop-shadow-md"
               />
             </div>
 
             <div className="space-y-3 text-center sm:text-left flex-1">
               <div>
-                <span className="px-2.5 py-1 text-xs font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full inline-block mb-2">
+                <span className="px-3 py-1 text-xs font-bold text-[#8B263E] dark:text-[#D4AF37] bg-[#FFEBEF] dark:bg-[#3A222F] border border-[#8B263E]/20 dark:border-[#D4AF37]/30 rounded-full inline-block mb-2 uppercase tracking-wider">
                   {wine.winery || wine.bodega || 'Bodega Reserva'}
                 </span>
-                <h3 className="text-2xl font-bold text-slate-100">
+
+                <h3 className="text-2xl font-bold font-serif">
                   {wine.name || wine.nombre}
                 </h3>
               </div>
@@ -111,55 +221,75 @@ export default function WineDetailModal({ wine, isOpen, onClose, currentUserId, 
               {/* Promedio Global */}
               <div className="flex items-center justify-center sm:justify-start space-x-2">
                 <StarRating rating={Number(averageRating)} size="lg" />
-                <span className="text-lg font-bold text-slate-200">{averageRating}</span>
-                <span className="text-xs text-slate-400">
-                  ({reviews.length} {reviews.length === 1 ? 'reseña' : 'reseñas de la comunidad'})
+                <span className="text-lg font-bold text-[#D4AF37]">
+                  {averageRating}
+                </span>
+                <span className="text-xs text-[#78716C] dark:text-[#F5F5F4]/60">
+                  ({reviews.length}{' '}
+                  {reviews.length === 1
+                    ? 'reseña'
+                    : 'reseñas de la comunidad'})
                 </span>
               </div>
 
-              <div className="flex items-center justify-center sm:justify-start space-x-4 text-xs text-slate-400 border-y border-slate-700/40 py-2">
+              {/* Tabla Técnica */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center sm:text-left text-xs bg-[#F9F6F0] dark:bg-[#120A0E] p-4 rounded-2xl border border-[#E8E2D5] dark:border-[#3A222F] mt-3">
                 <div>
-                  <span className="uppercase block text-[10px] text-slate-500 font-bold">Varietal</span>
-                  <span className="text-slate-200 font-medium">{wine.varietal || wine.type || 'Tinto'}</span>
+                  <span className="uppercase block text-[10px] text-[#78716C] dark:text-[#F5F5F4]/60 font-extrabold">
+                    Variedad / Cepa
+                  </span>
+                  <span className="font-bold capitalize text-[#2C0B14] dark:text-[#F5F5F4]">
+                    {wine.variety || wine.varietal || wine.type || 'Tinto'}
+                  </span>
                 </div>
-                <div className="border-l border-slate-700/60 pl-4">
-                  <span className="uppercase block text-[10px] text-slate-500 font-bold">Precio</span>
-                  <span className="text-amber-400 font-bold">${wine.price || wine.precio || '0.00'}</span>
+
+                <div className="border-l border-[#E8E2D5] dark:border-[#3A222F] pl-3">
+                  <span className="uppercase block text-[10px] text-[#78716C] dark:text-[#F5F5F4]/60 font-extrabold">
+                    Región
+                  </span>
+                  <span className="font-bold text-[#2C0B14] dark:text-[#F5F5F4]">
+                    {wine.region || 'Mendoza'}
+                  </span>
+                </div>
+
+                <div className="border-t sm:border-t-0 sm:border-l border-[#E8E2D5] dark:border-[#3A222F] pt-2 sm:pt-0 sm:pl-3 col-span-2 sm:col-span-1">
+                  <span className="uppercase block text-[10px] text-[#78716C] dark:text-[#F5F5F4]/60 font-extrabold">
+                    Añada
+                  </span>
+                  <span className="text-[#D4AF37] font-extrabold">
+                    {wine.year || wine.vintage || 'N/A'}
+                  </span>
                 </div>
               </div>
-
-              <p className="text-slate-300 text-sm leading-relaxed">
-                {wine.description || wine.descripcion || 'Sin descripción oficial asignada.'}
-              </p>
             </div>
           </div>
 
-          {/* Listado de Reseñas de la Comunidad */}
-          <div className="border-t border-slate-700/60 pt-5 space-y-4">
-            <h4 className="text-md font-bold text-slate-200 flex items-center space-x-2">
+          {/* Listado de Notas de Cata */}
+          <div className="border-t border-[#E8E2D5] dark:border-[#3A222F] pt-5 space-y-4">
+            <h4 className="text-md font-bold font-serif flex items-center space-x-2">
               <span>💬</span>
               <span>Notas de cata de la comunidad</span>
             </h4>
 
             {loading && (
-              <div className="flex items-center justify-center py-8 text-slate-400 text-xs space-x-2">
-                <div className="w-4 h-4 border-2 border-amber-500/30 border-t-amber-500 rounded-full animate-spin" />
-                <span>Obteniendo calificaciones de MongoDB...</span>
+              <div className="flex items-center justify-center py-8 text-[#78716C] text-xs space-x-2">
+                <div className="w-4 h-4 border-2 border-[#8B263E]/30 border-t-[#8B263E] rounded-full animate-spin" />
+                <span>Cargando notas de sommelier...</span>
               </div>
             )}
 
             {error && !loading && (
-              <p className="text-xs text-rose-400 text-center py-4 bg-rose-500/10 rounded-xl border border-rose-500/20">
+              <p className="text-xs text-[#8B263E] text-center py-4 bg-[#FFEBEF] rounded-2xl border border-[#8B263E]/30 font-medium">
                 {error}
               </p>
             )}
 
             {!loading && !error && reviews.length === 0 && (
-              <div className="p-6 text-center bg-slate-900/40 rounded-xl border border-slate-700/30">
-                <p className="text-xs text-slate-400">
+              <div className="p-6 text-center bg-[#F9F6F0] dark:bg-[#120A0E] rounded-2xl border border-[#E8E2D5] dark:border-[#3A222F]">
+                <p className="text-xs text-[#78716C] dark:text-[#F5F5F4]/70">
                   Aún nadie ha publicado una nota de cata para este vino.
                 </p>
-                <p className="text-[11px] text-amber-400/80 mt-1">
+                <p className="text-[11px] text-[#D4AF37] font-semibold mt-1">
                   ¡Sé la primera persona en calificarlo desde la tarjeta del catálogo!
                 </p>
               </div>
@@ -176,61 +306,154 @@ export default function WineDetailModal({ wine, isOpen, onClose, currentUserId, 
                     rev.userId?.email ||
                     'Catador Anónimo';
 
-                  const userId = rev.user?._id || rev.user?.id || rev.userId?._id || rev.userId;
+                  const userId =
+                    rev.user?._id ||
+                    rev.user?.id ||
+                    rev.userId?._id ||
+                    rev.userId;
+
+                  const reviewId = String(rev._id || rev.id);
+                  const isEditing = editingReviewId === reviewId;
+                  const isOwner =
+                    currentUserId != null &&
+                    userId != null &&
+                    String(userId) === String(currentUserId);
+
                   const firstInitial = authorName.charAt(0).toUpperCase();
-                  const scoreValue = rev.rating || rev.score || 0;
-                  const commentText = rev.comment || rev.comments || rev.text || '';
+                  const scoreValue = rev.rating ?? rev.score ?? 0;
+                  const commentText =
+                    rev.comment ?? rev.comments ?? rev.text ?? '';
 
                   return (
                     <div
-                      key={rev._id || index}
-                      className="p-4 bg-slate-900/60 border border-slate-700/40 rounded-xl space-y-2"
+                      key={reviewId || index}
+                      className="p-4 bg-[#F9F6F0] dark:bg-[#120A0E] border border-[#E8E2D5] dark:border-[#3A222F] rounded-2xl space-y-2"
                     >
                       <div className="flex items-center justify-between">
-                        {/* Clic en el usuario para abrir su Perfil */}
                         <button
-                          onClick={() => onSelectUser && userId && onSelectUser(userId)}
+                          onClick={() =>
+                            onSelectUser && userId && onSelectUser(userId)
+                          }
                           className="flex items-center space-x-2.5 hover:opacity-80 transition-opacity text-left cursor-pointer"
                         >
-                          <span className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 font-bold text-xs flex items-center justify-center border border-amber-500/30">
+                          <span className="w-8 h-8 rounded-full bg-[#4A1222] text-[#D4AF37] font-bold text-xs flex items-center justify-center border border-[#D4AF37]/50">
                             {firstInitial}
                           </span>
+
                           <div>
-                            <span className="text-xs font-bold text-slate-200 block hover:underline">
+                            <span className="text-xs font-bold hover:underline block">
                               {authorName}
                             </span>
                             {rev.createdAt && (
-                              <span className="text-[10px] text-slate-500 block">
+                              <span className="text-[10px] text-[#78716C] dark:text-[#F5F5F4]/50 block">
                                 {new Date(rev.createdAt).toLocaleDateString()}
                               </span>
                             )}
                           </div>
                         </button>
 
-                        <StarRating rating={scoreValue} size="sm" />
+                        {!isEditing && (
+                          <StarRating rating={Number(scoreValue)} size="sm" />
+                        )}
                       </div>
 
-                      {/* Nota de cata o comentario */}
-                      {commentText ? (
-                        <p className="text-xs text-slate-300 italic pl-9">
-                          "{commentText}"
-                        </p>
+                      {isEditing ? (
+                        <div className="pl-10 space-y-3">
+                          <div>
+                            <label className="block text-xs font-semibold mb-2">
+                              Tu puntuación
+                            </label>
+                            <StarRating
+                              rating={Number(editRating)}
+                              onRatingChange={setEditRating}
+                              size="md"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-semibold mb-2">
+                              Tu comentario
+                            </label>
+                            <textarea
+                              value={editComment}
+                              onChange={(e) => setEditComment(e.target.value)}
+                              placeholder="Escribí tu comentario..."
+                              rows={3}
+                              className="w-full rounded-xl border border-[#E8E2D5] dark:border-[#3A222F] bg-white dark:bg-[#1E1218] p-3 text-xs"
+                            />
+                          </div>
+
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={cancelEditing}
+                              disabled={savingReview || deletingReviewId !== null}
+                              className="rounded-lg border border-[#E8E2D5] dark:border-[#3A222F] px-3 py-2 text-xs disabled:opacity-50"
+                            >
+                              Cancelar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateReview(reviewId)}
+                              disabled={savingReview || deletingReviewId !== null}
+                              className="rounded-lg bg-[#4A1222] hover:bg-[#6B1D34] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                            >
+                              {savingReview ? 'Guardando...' : 'Guardar cambios'}
+                            </button>
+                          </div>
+                        </div>
                       ) : (
-                        <p className="text-[11px] text-slate-500 italic pl-9">
-                          Sin comentario escrito.
-                        </p>
-                      )}
+                        <>
+                          {commentText ? (
+                            <p className="text-xs italic pl-10 text-[#2C0B14] dark:text-[#F5F5F4]/90">
+                              "{commentText}"
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-[#78716C] dark:text-[#F5F5F4]/50 italic pl-10">
+                              Sin comentario escrito.
+                            </p>
+                          )}
 
-                      {/* Botón de Likes */}
-                      <div className="flex justify-end pt-1">
-                        <button
-                          onClick={() => handleLike(rev._id || rev.id)}
-                          className="flex items-center space-x-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/50 cursor-pointer"
-                        >
-                          <span>❤️</span>
-                          <span className="font-semibold">{rev.likes?.length || 0}</span>
-                        </button>
-                      </div>
+                          <div className="flex items-center justify-end gap-2 pt-1">
+                            {isOwner && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => startEditing(rev)}
+                                  disabled={savingReview || deletingReviewId !== null}
+                                  className="text-xs font-semibold text-[#8B263E] dark:text-[#D4AF37] hover:underline px-2 py-1 disabled:opacity-50"
+                                >
+                                  Editar reseña
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteReview(reviewId)}
+                                  disabled={savingReview || deletingReviewId !== null}
+                                  className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline px-2 py-1 disabled:opacity-50"
+                                >
+                                  {String(deletingReviewId) === reviewId
+                                    ? 'Eliminando...'
+                                    : 'Eliminar reseña'}
+                                </button>
+                              </>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleLike(rev._id || rev.id)}
+                              disabled={deletingReviewId !== null}
+                              className="flex items-center space-x-1.5 text-xs text-[#78716C] dark:text-[#F5F5F4]/70 hover:text-[#8B263E] bg-[#FFFFFF] dark:bg-[#1E1218] px-3 py-1 rounded-xl border border-[#E8E2D5] dark:border-[#3A222F] cursor-pointer transition-colors disabled:opacity-50"
+                            >
+                              <span>❤️</span>
+                              <span className="font-bold">
+                                {rev.likes?.length || 0}
+                              </span>
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -239,16 +462,15 @@ export default function WineDetailModal({ wine, isOpen, onClose, currentUserId, 
           </div>
         </div>
 
-        {/* Pie de Modal */}
-        <div className="p-4 bg-slate-900/80 border-t border-slate-700/60 flex justify-end">
+        {/* Pie */}
+        <div className="p-4 bg-[#F9F6F0] dark:bg-[#120A0E] border-t border-[#E8E2D5] dark:border-[#3A222F] flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+            className="px-5 py-2 text-xs font-bold text-[#F5F5F4] bg-[#4A1222] hover:bg-[#6B1D34] rounded-xl transition-colors cursor-pointer"
           >
-            Cerrar
+            Cerrar Ficha
           </button>
         </div>
-
       </div>
     </div>
   );
