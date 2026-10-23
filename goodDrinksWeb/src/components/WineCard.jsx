@@ -2,8 +2,15 @@
 import { useState } from 'react';
 import StarRating from './StarRating';
 
-export default function WineCard({ wine, currentUserId, isDarkMode, onSelect, onCalificar }) {
-  const [favorite, setFavorite] = useState(false);
+export default function WineCard({
+  wine,
+  currentUserId,
+  isDarkMode,
+  onSelect,
+  onCalificar,
+  isFavorite = false,
+  onToggleFavorite,
+}) {
   const [cavaStatus, setCavaStatus] = useState('por_probar');
 
   const defaultImage =
@@ -66,7 +73,7 @@ export default function WineCard({ wine, currentUserId, isDarkMode, onSelect, on
 
   return (
     <div className={`rounded-3xl border transition-all duration-300 overflow-hidden flex flex-col justify-between p-4 group ${cardContainerStyle}`}>
-      
+
       {/* 1. Imagen con Badges y Favorito */}
       <div className={`relative w-full h-56 rounded-2xl overflow-hidden flex items-center justify-center p-4 transition-colors ${imageAreaStyle}`}>
         <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5 items-start">
@@ -78,18 +85,28 @@ export default function WineCard({ wine, currentUserId, isDarkMode, onSelect, on
           </span>
         </div>
 
+
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setFavorite(!favorite);
+            if (onToggleFavorite) {
+              onToggleFavorite(wine);
+            }
           }}
+          aria-label={
+            isFavorite
+              ? 'Quitar de favoritos'
+              : 'Agregar a favoritos'
+          }
+          aria-pressed={isFavorite}
           className="absolute top-3 right-3 z-10 w-9 h-9 bg-[#FFFFFF]/90 dark:bg-[#1E1218]/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform cursor-pointer border border-[#E8E2D5]/60 dark:border-[#3A222F]"
         >
-          <span className={`text-base ${favorite ? 'text-[#8B263E]' : 'text-[#78716C]'}`}>
-            {favorite ? '❤️' : '🤍'}
+          <span className={`text-base ${isFavorite ? 'text-[#8B263E]' : 'text-[#78716C]'}`}>
+            {isFavorite ? '❤️' : '🤍'}
           </span>
         </button>
+
 
         <img
           src={wine.imageUrl || wine.image || defaultImage}
@@ -137,7 +154,7 @@ export default function WineCard({ wine, currentUserId, isDarkMode, onSelect, on
             <span className="text-xs font-bold text-[#D4AF37]">
               {averageRating > 0 ? averageRating : 'S/N'}
             </span>
-            
+
             <button
               type="button"
               onClick={() => onSelect && onSelect(wine)}

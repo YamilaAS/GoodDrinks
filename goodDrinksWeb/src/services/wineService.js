@@ -4,6 +4,7 @@ import api from '../api/axios';
 // Servicio de vinos y reseñas.
 // Todas las peticiones utilizan la instancia compartida de Axios.
 export const wineService = {
+    // Vinos
   getAllWines: async () => {
     const response = await api.get('/wines');
     return response.data;
@@ -14,8 +15,30 @@ export const wineService = {
     return response.data;
   },
 
+  createWine: async (wineData) => {
+    const response = await api.post('/wines', wineData);
+    return response.data;
+  },
 
 
+  // Favoritos de vinos
+  getMyFavorites: async () => {
+    const response = await api.get('/favorites/me');
+    return response.data;
+  },
+
+  addFavorite: async (wineId) => {
+    const response = await api.post(`/favorites/${wineId}`);
+    return response.data;
+  },
+
+  removeFavorite: async (wineId) => {
+    const response = await api.delete(`/favorites/${wineId}`);
+    return response.data;
+  },
+
+
+  // Reseñas de vinos
   updateReview: async (ratingId, reviewData) => {
     const response = await api.put(`/ratings/${ratingId}`, reviewData);
     return response.data;
@@ -23,13 +46,6 @@ export const wineService = {
 
   deleteReview: async (ratingId) => {
     const response = await api.delete(`/ratings/${ratingId}`);
-    return response.data;
-  },
-
-
-
-  createWine: async (wineData) => {
-    const response = await api.post('/wines', wineData);
     return response.data;
   },
 
@@ -56,12 +72,10 @@ export const wineService = {
     return response.data;
   },
 
-
   getReviewsByWineIds: async (wineIds) => {
     const response = await api.post('/ratings/batch', { wineIds });
     return response.data;
  },
-
 
   toggleLike: async (ratingId) => {
     const response = await api.post(`/ratings/${ratingId}/like`);

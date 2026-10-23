@@ -67,6 +67,9 @@ export default function Dashboard() {
   const [wines, setWines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [favoriteWineIds, setFavoriteWineIds] = useState([]);
+  const [favoriteActionIds, setFavoriteActionIds] = useState([]);
+  const [favoritesError, setFavoritesError] = useState('');
 
   const [isDarkMode, setIsDarkMode] = useState(
     () => localStorage.getItem('theme') === 'dark'
@@ -146,7 +149,7 @@ export default function Dashboard() {
           ...wine,
           reviews: wineId
             ? reviewsByWineId[String(wineId)] ||
-              (Array.isArray(wine?.reviews) ? wine.reviews : [])
+            (Array.isArray(wine?.reviews) ? wine.reviews : [])
             : Array.isArray(wine?.reviews)
               ? wine.reviews
               : [],
@@ -162,9 +165,88 @@ export default function Dashboard() {
     }
   }, []);
 
+  const fetchFavorites = useCallback(async () => {
+    if (!currentUserId) {
+      setFavoriteWineIds([]);
+      return;
+    }
+
+    try {
+      setFavoritesError('');
+
+      const data = await wineService.getMyFavorites();
+
+      const favorites = normalizeList(data, ['favorites', 'data']);
+
+      const ids = favorites
+        .map((favorite) => {
+          const wine = favorite?.wine;
+
+          if (wine && typeof wine === 'object') {
+            return wine._id || wine.id;
+          }
+
+          return wine;
+        })
+        .filter(Boolean)
+        .map(String);
+
+      setFavoriteWineIds(ids);
+    } catch (err) {
+      console.error('Error al cargar favoritos:', err);
+      setFavoritesError('No se pudieron cargar tus favoritos.');
+    }
+  }, [currentUserId]);
+
   useEffect(() => {
     fetchWines();
   }, [fetchWines]);
+
+  useEffect(() => {
+    fetchFavorites();
+  }, [fetchFavorites]);
+
+  const handleToggleFavorite = async (wine) => {
+    const wineId = wine?._id || wine?.id;
+
+    if (!wineId) {
+      setFavoritesError('No se pudo identificar el vino.');
+      return;
+    }
+
+    const id = String(wineId);
+
+    // Evitamos operaciones duplicadas sobre el mismo vino.
+    if (favoriteActionIds.includes(id)) return;
+
+    const alreadyFavorite = favoriteWineIds.includes(id);
+
+    setFavoriteActionIds((current) => [...current, id]);
+    setFavoritesError('');
+
+    try {
+      if (alreadyFavorite) {
+        await wineService.removeFavorite(id);
+
+        setFavoriteWineIds((current) =>
+          current.filter((favoriteId) => favoriteId !== id)
+        );
+      } else {
+        await wineService.addFavorite(id);
+
+        setFavoriteWineIds((current) =>
+          current.includes(id) ? current : [...current, id]
+        );
+      }
+    } catch (err) {
+      console.error('Error al modificar favoritos:', err);
+      setFavoritesError('No se pudo actualizar el favorito. Intentá nuevamente.');
+    } finally {
+      setFavoriteActionIds((current) =>
+        current.filter((favoriteId) => favoriteId !== id)
+      );
+    }
+  };
 
   const handleSearchChange = (event) => {
     const value = event.target.value;
@@ -361,6 +443,22 @@ export default function Dashboard() {
           )}
         </div>
 
+        {favoritesError && (
+          <div
+            role="alert"
+            className="rounded-xl border border-[#8B263E]/30 bg-[#FFEBEF] p-3 text-sm text-[#8B263E]"
+          >
+            {favoritesError}
+            <button
+              type="button"
+              onClick={fetchFavorites}
+              className="ml-2 font-bold underline"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
         {/* Catálogo de vinos */}
         {loading && (
           <div
@@ -415,6 +513,10 @@ export default function Dashboard() {
                 isDarkMode={isDarkMode}
                 onSelect={setSelectedWine}
                 onCalificar={setRatingWine}
+                isFavorite={favoriteWineIds.includes(
+                  String(wine._id || wine.id)
+                )}
+                onToggleFavorite={handleToggleFavorite}
               />
             ))}
           </div>

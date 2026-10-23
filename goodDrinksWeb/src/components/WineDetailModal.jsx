@@ -10,6 +10,8 @@ export default function WineDetailModal({
   currentUserId,
   onSelectUser,
 }) {
+  console.log('currentUserId:', currentUserId);
+
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -18,6 +20,7 @@ export default function WineDetailModal({
   const [editComment, setEditComment] = useState('');
   const [savingReview, setSavingReview] = useState(false);
   const [deletingReviewId, setDeletingReviewId] = useState(null);
+  const [likingReviewIds, setLikingReviewIds] = useState([]);
 
   const defaultImage =
     'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=400';
@@ -49,36 +52,97 @@ export default function WineDetailModal({
     fetchReviews();
   }, [isOpen, wine]);
 
+
   const handleLike = async (ratingId) => {
+    console.log('❤️ Se ejecutó handleLike:', ratingId);
+    if (!currentUserId) {
+      setError('Iniciá sesión para dar like a una reseña.');
+      return;
+    }
+
+    if (likingReviewIds.includes(String(ratingId))) {
+      return;
+    }
+
+    const review = reviews.find(
+      (item) => String(item._id || item.id) === String(ratingId)
+    );
+
+    if (!review) return;
+
+    const previousLikes = review.likes || [];
+
+    const hasLiked = previousLikes.some(
+      (like) =>
+        String(like?._id || like?.id || like) === String(currentUserId)
+    );
+
+    // Actualización optimista: la interfaz responde inmediatamente.
+    setReviews((prev) =>
+      prev.map((item) => {
+        if (String(item._id || item.id) !== String(ratingId)) {
+          return item;
+        }
+
+        return {
+          ...item,
+          likes: hasLiked
+            ? previousLikes.filter(
+              (like) =>
+                String(like?._id || like?.id || like) !==
+                String(currentUserId)
+            )
+            : [...previousLikes, currentUserId],
+        };
+      })
+    );
+
+    setLikingReviewIds((prev) => [...prev, String(ratingId)]);
+    setError('');
+
     try {
-      await wineService.toggleLike(ratingId);
+      const response = await wineService.toggleLike(ratingId);
 
-      setReviews((prev) =>
-        prev.map((review) => {
-          const reviewId = review._id || review.id;
+      console.log('✅ Respuesta del servidor:', response);
+console.log('❤️ Likes devueltos:', response?.rating?.likes);
 
-          if (String(reviewId) !== String(ratingId)) return review;
+      // El servidor es la fuente definitiva del estado.
+      const updatedRating = response?.rating;
 
-          const currentLikes = review.likes || [];
-          const hasLiked = currentLikes.some(
-            (id) => String(id?._id || id?.id || id) === String(currentUserId)
-          );
-
-          const updatedLikes = hasLiked
-            ? currentLikes.filter(
-                (id) =>
-                  String(id?._id || id?.id || id) !== String(currentUserId)
-              )
-            : [...currentLikes, currentUserId];
-
-          return { ...review, likes: updatedLikes };
-        })
-      );
+      if (updatedRating) {
+        setReviews((prev) =>
+          prev.map((item) =>
+            String(item._id || item.id) === String(ratingId)
+              ? { ...item, ...updatedRating }
+              : item
+          )
+        );
+      }
     } catch (err) {
       console.error('Error al procesar el like:', err);
-      setError('No se pudo procesar el like.');
+console.log('❌ Estado HTTP:', err?.response?.status);
+console.log('❌ Error del servidor:', err?.response?.data);
+      // Si falla el servidor, revertimos el cambio visual.
+      setReviews((prev) =>
+        prev.map((item) =>
+          String(item._id || item.id) === String(ratingId)
+            ? { ...item, likes: previousLikes }
+            : item
+        )
+      );
+
+      const backendMsg =
+        err?.response?.data?.error ||
+        err?.response?.data?.message;
+
+      setError(backendMsg || 'No se pudo procesar el like.');
+    } finally {
+      setLikingReviewIds((prev) =>
+        prev.filter((id) => id !== String(ratingId))
+      );
     }
   };
+
 
   const startEditing = (review) => {
     setEditingReviewId(String(review._id || review.id));
@@ -166,12 +230,12 @@ export default function WineDetailModal({
   const averageRating =
     reviews.length > 0
       ? (
-          reviews.reduce(
-            (acc, review) =>
-              acc + Number(review.rating ?? review.score ?? 0),
-            0
-          ) / reviews.length
-        ).toFixed(1)
+        reviews.reduce(
+          (acc, review) =>
+            acc + Number(review.rating ?? review.score ?? 0),
+          0
+        ) / reviews.length
+      ).toFixed(1)
       : Number(wine.averageRating ?? wine.rating ?? 0).toFixed(1);
 
   return (
@@ -440,17 +504,61 @@ export default function WineDetailModal({
                               </>
                             )}
 
-                            <button
-                              type="button"
-                              onClick={() => handleLike(rev._id || rev.id)}
-                              disabled={deletingReviewId !== null}
-                              className="flex items-center space-x-1.5 text-xs text-[#78716C] dark:text-[#F5F5F4]/70 hover:text-[#8B263E] bg-[#FFFFFF] dark:bg-[#1E1218] px-3 py-1 rounded-xl border border-[#E8E2D5] dark:border-[#3A222F] cursor-pointer transition-colors disabled:opacity-50"
-                            >
-                              <span>❤️</span>
-                              <span className="font-bold">
-                                {rev.likes?.length || 0}
-                              </span>
-                            </button>
+
+                            {(() => {
+                              const likes = rev.likes || [];
+
+                              const hasLiked =
+                                currentUserId != null &&
+                                likes.some(
+                                  (like) =>
+                                    String(like?._id || like?.id || like) ===
+                                    String(currentUserId)
+                                );
+
+                              const isLiking = likingReviewIds.includes(reviewId);
+
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleLike(reviewId)}
+                                  disabled={
+                                    !currentUserId ||
+                                    isLiking ||
+                                    deletingReviewId !== null ||
+                                    savingReview
+                                  }
+                                  title={
+                                    !currentUserId
+                                      ? 'Iniciá sesión para dar like'
+                                      : hasLiked
+                                        ? 'Quitar like'
+                                        : 'Dar like'
+                                  }
+                                  aria-label={
+                                    hasLiked
+                                      ? `Quitar like. ${likes.length} likes`
+                                      : `Dar like. ${likes.length} likes`
+                                  }
+                                  aria-pressed={hasLiked}
+                                  className={`flex items-center gap-1.5 text-xs px-3 py-1 rounded-xl border transition-colors disabled:opacity-50 ${hasLiked
+                                      ? 'text-[#8B263E] dark:text-[#F87171] border-[#8B263E]/40 bg-[#FFEBEF] dark:bg-[#3A222F]'
+                                      : 'text-[#78716C] dark:text-[#F5F5F4]/70 hover:text-[#8B263E] bg-white dark:bg-[#1E1218] border-[#E8E2D5] dark:border-[#3A222F]'
+                                    }`}
+                                >
+                                  <span aria-hidden="true">
+                                    {hasLiked ? '❤️' : '🤍'}
+                                  </span>
+
+                                  <span className="font-bold">
+                                    {likes.length}
+                                  </span>
+
+                                  {isLiking && <span>...</span>}
+                                </button>
+                              );
+                            })()}
+
                           </div>
                         </>
                       )}
