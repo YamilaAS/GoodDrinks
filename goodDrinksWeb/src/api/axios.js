@@ -38,8 +38,7 @@ api.interceptors.response.use(
 
     // Un login fallido no debe borrar automáticamente la sesión
     // por este interceptor.
-    const isAuthRequest =
-      /\/users\/(login|register)\/?$/.test(url);
+    const isAuthRequest = /\/(login|register)\/?$/.test(url);
 
     if (status === 401 && !isAuthRequest && localStorage.getItem('token')) {
       unauthorizedHandler?.();
