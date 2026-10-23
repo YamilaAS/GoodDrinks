@@ -83,6 +83,7 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('ALL');
   const [sortBy, setSortBy] = useState('DEFAULT');
+  const [activeView, setActiveView] = useState('catalog');
 
   const storedUser = getStoredUser();
   const currentUserId = storedUser._id || storedUser.id || null;
@@ -277,6 +278,17 @@ export default function Dashboard() {
   const filteredWines = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
+    const winesToShow =
+      activeView === 'favorites'
+        ? wines.filter((wine) =>
+          favoriteWineIds.includes(
+            String(wine._id || wine.id)
+          )
+        )
+        : wines;
+
+    return winesToShow
+
     return wines
       .filter((wine) => {
         if (normalizedSearch) {
@@ -331,7 +343,14 @@ export default function Dashboard() {
 
         return 0;
       });
-  }, [wines, searchTerm, selectedType, sortBy]);
+  }, [
+    wines,
+    favoriteWineIds,
+    activeView,
+    searchTerm,
+    selectedType,
+    sortBy,
+  ]);
 
   const bgMain = isDarkMode
     ? 'bg-[#120A0E] text-[#F5F5F4]'
@@ -354,6 +373,33 @@ export default function Dashboard() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setActiveView('catalog')}
+            aria-pressed={activeView === 'catalog'}
+            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'catalog'
+              ? 'bg-[#4A1222] text-white shadow-md'
+              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
+              }`}
+          >
+            🍷 Catálogo
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('favorites')}
+            aria-pressed={activeView === 'favorites'}
+            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'favorites'
+              ? 'bg-[#4A1222] text-white shadow-md'
+              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
+              }`}
+          >
+            ❤️ Mis favoritos ({favoriteWineIds.length})
+          </button>
+        </div>
+
         {/* Panel de filtros */}
         <div className={`border rounded-3xl p-4 sm:p-6 transition-all ${panelBg}`}>
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
@@ -489,7 +535,27 @@ export default function Dashboard() {
         {!loading && !error && filteredWines.length === 0 && (
           <div className="text-center py-16 bg-[#FFFFFF] dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F] rounded-3xl p-8 space-y-3">
             <span className="text-4xl block">🍷</span>
-            <h3 className="text-lg font-bold">No hay vinos para este filtro</h3>
+            <h3 className="text-lg font-bold">
+              {activeView === 'favorites'
+                ? 'Todavía no tenés vinos favoritos'
+                : 'No hay vinos para este filtro'}
+            </h3>
+
+            <p className="text-xs opacity-70">
+              {activeView === 'favorites'
+                ? 'Marcá el corazón de un vino para guardarlo en esta sección.'
+                : 'Intentá seleccionar otra variedad o restablecé la búsqueda.'}
+            </p>
+
+            {activeView === 'favorites' && (
+              <button
+                type="button"
+                onClick={() => setActiveView('catalog')}
+                className="mt-2 bg-[#4A1222] text-white text-xs px-4 py-2 rounded-xl cursor-pointer"
+              >
+                Explorar vinos
+              </button>
+            )}
             <p className="text-xs opacity-70">
               Intenta seleccionar otra variedad o restablece la búsqueda.
             </p>
