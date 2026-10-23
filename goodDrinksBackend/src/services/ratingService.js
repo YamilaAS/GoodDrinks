@@ -79,22 +79,36 @@ class RatingService {
   return { message: 'Reseña eliminada exitosamente' };
 }
 
-  async toggleLikeRating(ratingId, userId) {
-    const updatedRating = await ratingRepository.toggleLike
-      ? await ratingRepository.toggleLike(ratingId, userId)
-      : await ratingRepository.findById(ratingId);
+  
 
-    if (!updatedRating) {
+  async toggleLikeRating(ratingId, userId) {
+    const rating = await ratingRepository.findById(ratingId);
+
+    if (!rating) {
       const error = new Error('Reseña no encontrada');
       error.statusCode = 404;
       throw error;
     }
 
+    const hasLiked = rating.likes.some(
+      (like) => like.toString() === userId.toString()
+    );
+
+    const updatedRating = await ratingRepository.toggleLike(
+      ratingId,
+      userId,
+      hasLiked
+    );
+
     return {
-      message: 'Reseña cliqueada con Like con éxito',
+      message: hasLiked
+        ? 'Like eliminado correctamente'
+        : 'Like agregado correctamente',
       rating: RatingDTO.toResponse(updatedRating)
     };
   }
+
+
 }
 
 module.exports = new RatingService();
