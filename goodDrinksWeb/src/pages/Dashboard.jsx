@@ -1,13 +1,20 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+
 import Header from '../components/Header';
 import WineCard from '../components/WineCard';
 import AddWineModal from '../components/AddWineModal';
 import WineDetailModal from '../components/WineDetailModal';
 import RateWineModal from '../components/RateWineModal';
 import UserProfileModal from '../components/UserProfileModal';
+
 import { wineService } from '../services/wineService';
 
+// ============================================================
+// 1. CONFIGURACIÓN Y FUNCIONES AUXILIARES
+// ============================================================
+
+// Palabras que identifican cada tipo de vino.
 const WINE_TYPE_MAP = {
   tinto: [
     'tinto', 'red', 'malbec', 'cabernet', 'syrah', 'shiraz',
@@ -24,15 +31,18 @@ const WINE_TYPE_MAP = {
   ],
 };
 
+// Convierte textos y números a minúsculas para las búsquedas.
 const getText = (value) =>
   typeof value === 'string' || typeof value === 'number'
     ? String(value).toLowerCase()
     : '';
 
+// Obtiene un número válido, por ejemplo para ordenar por precio.
 const getNumber = (...values) => {
   for (const value of values) {
     if (value !== null && value !== undefined && value !== '') {
       const number = Number(value);
+
       if (Number.isFinite(number)) return number;
     }
   }
@@ -40,6 +50,7 @@ const getNumber = (...values) => {
   return 0;
 };
 
+// Recupera el usuario guardado en localStorage.
 const getStoredUser = () => {
   try {
     const storedUser = localStorage.getItem('user');
@@ -53,6 +64,8 @@ const getStoredUser = () => {
   }
 };
 
+// Normaliza respuestas que pueden venir como arrays
+// o como objetos que contienen arrays.
 const normalizeList = (data, keys) => {
   if (Array.isArray(data)) return data;
 
@@ -63,30 +76,80 @@ const normalizeList = (data, keys) => {
   return [];
 };
 
+// Obtiene el identificador del vino en distintos formatos.
+const getWineId = (wine) => {
+  if (!wine) return null;
+
+  if (typeof wine === 'object') {
+    return wine._id || wine.id || null;
+  }
+
+  return wine;
+};
+
+
+// ============================================================
+// 2. COMPONENTE PRINCIPAL Y ESTADOS
+// ============================================================
+
 export default function Dashboard() {
+  // -------------------------
+  // Catálogo
+  // -------------------------
   const [wines, setWines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // -------------------------
+  // Favoritos
+  // -------------------------
   const [favoriteWineIds, setFavoriteWineIds] = useState([]);
   const [favoriteActionIds, setFavoriteActionIds] = useState([]);
   const [favoritesError, setFavoritesError] = useState('');
 
+  // -------------------------
+  // Cava / estantería
+  // -------------------------
+  // Ejemplo:
+  // { "id-del-vino": "Tomando" }
+  const [shelfStatusByWineId, setShelfStatusByWineId] = useState({});
+  const [shelfActionIds, setShelfActionIds] = useState([]);
+  const [shelfError, setShelfError] = useState('');
+
+  // -------------------------
+  // Apariencia
+  // -------------------------
   const [isDarkMode, setIsDarkMode] = useState(
     () => localStorage.getItem('theme') === 'dark'
   );
 
+  // -------------------------
+  // Modales
+  // -------------------------
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedWine, setSelectedWine] = useState(null);
   const [ratingWine, setRatingWine] = useState(null);
   const [selectedUserId, setSelectedUserId] = useState(null);
 
+  // -------------------------
+  // Búsqueda y filtros
+  // -------------------------
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('ALL');
   const [sortBy, setSortBy] = useState('DEFAULT');
+
+  // Vistas disponibles:
+  // catalog | favorites | cava | consumed
   const [activeView, setActiveView] = useState('catalog');
 
+  // Usuario actual.
   const storedUser = getStoredUser();
   const currentUserId = storedUser._id || storedUser.id || null;
+
+
+  // ============================================================
+  // 3. CAMBIAR EL TEMA VISUAL
+  // ============================================================
 
   const toggleTheme = () => {
     setIsDarkMode((currentMode) => {
@@ -98,53 +161,68 @@ export default function Dashboard() {
     });
   };
 
+
+  // ============================================================
+  // 4. CARGAR EL CATÁLOGO Y LAS RESEÑAS
+  // ============================================================
+
   const fetchWines = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
 
+      // Traemos todos los vinos.
       const data = await wineService.getAllWines();
       const rawWineList = normalizeList(data, ['wines', 'data']);
 
+      // Preparamos los IDs para buscar sus reseñas.
       const wineIds = rawWineList
-        .map((wine) => wine?._id || wine?.id)
+        .map((wine) => getWineId(wine))
         .filter(Boolean);
 
       let allReviews = [];
 
+      // Intentamos traer las reseñas en una sola petición.
       if (wineIds.length > 0) {
         try {
-          const reviewsData = await wineService.getReviewsByWineIds(wineIds);
+          const reviewsData =
+            await wineService.getReviewsByWineIds(wineIds);
+
           allReviews = normalizeList(reviewsData, [
             'ratings',
             'reviews',
             'data',
           ]);
         } catch (reviewsError) {
-          // Si falla la consulta conjunta, conservamos el catálogo.
-          console.error('Error al cargar las reseñas:', reviewsError);
+          // Si fallan las reseñas, conservamos el catálogo.
+          console.error(
+            'Error al cargar las reseñas:',
+            reviewsError
+          );
         }
       }
 
-      const reviewsByWineId = allReviews.reduce((groups, review) => {
-        const wineReference = review?.wine;
-        const wineId =
-          wineReference && typeof wineReference === 'object'
-            ? wineReference._id || wineReference.id
-            : wineReference;
+      // Agrupamos las reseñas por ID de vino.
+      const reviewsByWineId = allReviews.reduce(
+        (groups, review) => {
+          const wineId = getWineId(review?.wine);
 
-        if (!wineId) return groups;
+          if (!wineId) return groups;
 
-        const id = String(wineId);
+          const id = String(wineId);
 
-        if (!groups[id]) groups[id] = [];
-        groups[id].push(review);
+          if (!groups[id]) groups[id] = [];
 
-        return groups;
-      }, {});
+          groups[id].push(review);
 
+          return groups;
+        },
+        {}
+      );
+
+      // Añadimos las reseñas correspondientes a cada vino.
       const fullWinesList = rawWineList.map((wine) => {
-        const wineId = wine?._id || wine?.id;
+        const wineId = getWineId(wine);
 
         return {
           ...wine,
@@ -166,6 +244,11 @@ export default function Dashboard() {
     }
   }, []);
 
+
+  // ============================================================
+  // 5. CARGAR LOS FAVORITOS DEL USUARIO
+  // ============================================================
+
   const fetchFavorites = useCallback(async () => {
     if (!currentUserId) {
       setFavoriteWineIds([]);
@@ -177,27 +260,83 @@ export default function Dashboard() {
 
       const data = await wineService.getMyFavorites();
 
-      const favorites = normalizeList(data, ['favorites', 'data']);
+      const favorites = normalizeList(data, [
+        'favorites',
+        'data',
+      ]);
 
       const ids = favorites
-        .map((favorite) => {
-          const wine = favorite?.wine;
-
-          if (wine && typeof wine === 'object') {
-            return wine._id || wine.id;
-          }
-
-          return wine;
-        })
+        .map((favorite) => getWineId(favorite?.wine))
         .filter(Boolean)
         .map(String);
 
       setFavoriteWineIds(ids);
     } catch (err) {
       console.error('Error al cargar favoritos:', err);
-      setFavoritesError('No se pudieron cargar tus favoritos.');
+
+      setFavoritesError(
+        'No se pudieron cargar tus favoritos.'
+      );
     }
   }, [currentUserId]);
+
+
+  // ============================================================
+  // 6. CARGAR LOS ESTADOS DE LA CAVA
+  // ============================================================
+
+  const fetchShelves = useCallback(async () => {
+    if (!currentUserId) {
+      setShelfStatusByWineId({});
+      return;
+    }
+
+    try {
+      setShelfError('');
+
+      const data = await wineService.getMyShelves();
+
+      // Cada grupo del backend corresponde a un estado.
+      const groups = [
+        ['porProbar', 'Por probar'],
+        ['tomando', 'Tomando'],
+        ['yaTomados', 'Ya tomados'],
+      ];
+
+      const statusMap = {};
+
+      for (const [groupKey, status] of groups) {
+        const entries = Array.isArray(data?.[groupKey])
+          ? data[groupKey]
+          : [];
+
+        for (const entry of entries) {
+          // El DTO del backend debe incluir el vino asociado.
+          const wineId =
+            getWineId(entry?.wine) ||
+            getWineId(entry?.wineId) ||
+            getWineId(entry?.wines?.[0]);
+
+          if (wineId) {
+            statusMap[String(wineId)] = status;
+          }
+        }
+      }
+
+      setShelfStatusByWineId(statusMap);
+    } catch (err) {
+      console.error('Error al cargar la cava:', err);
+
+      setShelfError(
+        'No se pudieron cargar los estados de tu cava.'
+      );
+    }
+  }, [currentUserId]);
+
+
+  // ============================================================
+  // 7. CARGA INICIAL
+  // ============================================================
 
   useEffect(() => {
     fetchWines();
@@ -207,8 +346,17 @@ export default function Dashboard() {
     fetchFavorites();
   }, [fetchFavorites]);
 
+  useEffect(() => {
+    fetchShelves();
+  }, [fetchShelves]);
+
+
+  // ============================================================
+  // 8. AGREGAR O QUITAR UN FAVORITO
+  // ============================================================
+
   const handleToggleFavorite = async (wine) => {
-    const wineId = wine?._id || wine?.id;
+    const wineId = getWineId(wine);
 
     if (!wineId) {
       setFavoritesError('No se pudo identificar el vino.');
@@ -217,7 +365,7 @@ export default function Dashboard() {
 
     const id = String(wineId);
 
-    // Evitamos operaciones duplicadas sobre el mismo vino.
+    // Evitamos peticiones duplicadas sobre el mismo vino.
     if (favoriteActionIds.includes(id)) return;
 
     const alreadyFavorite = favoriteWineIds.includes(id);
@@ -241,13 +389,66 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error('Error al modificar favoritos:', err);
-      setFavoritesError('No se pudo actualizar el favorito. Intentá nuevamente.');
+
+      setFavoritesError(
+        'No se pudo actualizar el favorito. Intentá nuevamente.'
+      );
     } finally {
       setFavoriteActionIds((current) =>
         current.filter((favoriteId) => favoriteId !== id)
       );
     }
   };
+
+
+  // ============================================================
+  // 8.1. CAMBIAR EL ESTADO DE UN VINO EN LA CAVA
+  // ============================================================
+
+  const handleChangeCavaStatus = async (wine, newStatus) => {
+    const wineId = getWineId(wine);
+
+    if (!wineId) {
+      setShelfError('No se pudo identificar el vino.');
+      return;
+    }
+
+    const id = String(wineId);
+
+    // Evitamos enviar varias peticiones para el mismo vino.
+    if (shelfActionIds.includes(id)) return;
+
+    setShelfActionIds((current) => [...current, id]);
+    setShelfError('');
+
+    try {
+      // Guardamos el estado en el backend.
+      await wineService.updateShelfStatus(id, newStatus);
+
+      // Actualizamos la interfaz solo si la API respondió bien.
+      setShelfStatusByWineId((current) => ({
+        ...current,
+        [id]: newStatus,
+      }));
+    } catch (err) {
+      console.error('Error al actualizar la cava:', err);
+
+      setShelfError(
+        'No se pudo actualizar el estado del vino. Intentá nuevamente.'
+      );
+    } finally {
+      // Liberamos el vino para permitir nuevos cambios.
+      setShelfActionIds((current) =>
+        current.filter((actionId) => actionId !== id)
+      );
+    }
+  };
+
+
+
+  // ============================================================
+  // 9. BUSCADOR Y FILTROS
+  // ============================================================
 
   const handleSearchChange = (event) => {
     const value = event.target.value;
@@ -275,21 +476,33 @@ export default function Dashboard() {
     setSortBy('DEFAULT');
   };
 
+
+  // ============================================================
+  // 10. FILTRAR Y ORDENAR LOS VINOS
+  // ============================================================
+
   const filteredWines = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    const winesToShow =
-      activeView === 'favorites'
-        ? wines.filter((wine) =>
-          favoriteWineIds.includes(
-            String(wine._id || wine.id)
-          )
-        )
-        : wines;
+    // Primero elegimos qué vinos pertenecen a la vista.
+    let winesToShow = wines;
 
+    if (activeView === 'favorites') {
+      winesToShow = wines.filter((wine) =>
+        favoriteWineIds.includes(String(getWineId(wine)))
+      );
+    } else if (activeView === 'cava') {
+      winesToShow = wines.filter((wine) =>
+        shelfStatusByWineId[String(getWineId(wine))] === 'Tomando'
+      );
+    } else if (activeView === 'consumed') {
+      winesToShow = wines.filter((wine) =>
+        shelfStatusByWineId[String(getWineId(wine))] === 'Ya tomados'
+      );
+    }
+
+    // Después aplicamos búsqueda y variedad.
     return winesToShow
-
-    return wines
       .filter((wine) => {
         if (normalizedSearch) {
           const searchableFields = [
@@ -331,6 +544,7 @@ export default function Dashboard() {
 
         return true;
       })
+      // Finalmente ordenamos los resultados.
       .sort((a, b) => {
         const priceA = getNumber(a?.price, a?.cost);
         const priceB = getNumber(b?.price, b?.cost);
@@ -346,11 +560,17 @@ export default function Dashboard() {
   }, [
     wines,
     favoriteWineIds,
+    shelfStatusByWineId,
     activeView,
     searchTerm,
     selectedType,
     sortBy,
   ]);
+
+
+  // ============================================================
+  // 11. ESTILOS GENERALES
+  // ============================================================
 
   const bgMain = isDarkMode
     ? 'bg-[#120A0E] text-[#F5F5F4]'
@@ -364,8 +584,15 @@ export default function Dashboard() {
     ? 'bg-[#120A0E] border-[#3A222F] text-[#F5F5F4] focus:border-[#6B1D34]'
     : 'bg-[#F9F6F0] border-[#E8E2D5] text-[#1C1917] focus:border-[#4A1222]';
 
+
+  // ============================================================
+  // 12. INTERFAZ PRINCIPAL
+  // ============================================================
+
   return (
     <div className={`min-h-screen transition-colors duration-300 ${bgMain} pb-12`}>
+
+      {/* 12.1 Encabezado */}
       <Header
         onOpenProfile={(userId) => setSelectedUserId(userId)}
         isDarkMode={isDarkMode}
@@ -374,7 +601,11 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
+        {/* ======================================================
+            12.2 Navegación entre vistas
+            ====================================================== */}
         <div className="flex flex-wrap items-center gap-3">
+
           <button
             type="button"
             onClick={() => setActiveView('catalog')}
@@ -398,11 +629,48 @@ export default function Dashboard() {
           >
             ❤️ Mis favoritos ({favoriteWineIds.length})
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('cava')}
+            aria-pressed={activeView === 'cava'}
+            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'cava'
+              ? 'bg-[#4A1222] text-white shadow-md'
+              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
+              }`}
+          >
+            🍷 Mi cava (
+            {Object.values(shelfStatusByWineId).filter(
+              (status) => status === 'Tomando'
+            ).length}
+            )
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveView('consumed')}
+            aria-pressed={activeView === 'consumed'}
+            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'consumed'
+              ? 'bg-[#4A1222] text-white shadow-md'
+              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
+              }`}
+          >
+            ✅ Ya tomados (
+            {Object.values(shelfStatusByWineId).filter(
+              (status) => status === 'Ya tomados'
+            ).length}
+            )
+          </button>
         </div>
 
-        {/* Panel de filtros */}
+
+        {/* ======================================================
+            12.3 Panel de búsqueda y filtros
+            ====================================================== */}
         <div className={`border rounded-3xl p-4 sm:p-6 transition-all ${panelBg}`}>
+
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+
             {/* Buscador */}
             <div className="relative w-full md:w-80">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#78716C] text-sm">
@@ -430,8 +698,9 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Filtros y acción para añadir vinos */}
+            {/* Filtros y botón para añadir vinos */}
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+
               <select
                 value={selectedType}
                 onChange={handleTypeChange}
@@ -468,6 +737,7 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Información sobre filtros activos */}
           {(searchTerm || selectedType !== 'ALL' || sortBy !== 'DEFAULT') && (
             <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#E8E2D5] dark:border-[#3A222F] text-xs text-[#78716C]">
               <span>
@@ -489,12 +759,20 @@ export default function Dashboard() {
           )}
         </div>
 
+
+        {/* ======================================================
+            12.4 AVISOS DE ERROR
+            Este es el lugar donde va shelfError.
+            ====================================================== */}
+
+        {/* Error al cargar o modificar favoritos */}
         {favoritesError && (
           <div
             role="alert"
             className="rounded-xl border border-[#8B263E]/30 bg-[#FFEBEF] p-3 text-sm text-[#8B263E]"
           >
             {favoritesError}
+
             <button
               type="button"
               onClick={fetchFavorites}
@@ -505,14 +783,38 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Catálogo de vinos */}
+        {/* Error al cargar los estados de la cava */}
+        {shelfError && (
+          <div
+            role="alert"
+            className="rounded-xl border border-[#8B263E]/30 bg-[#FFEBEF] p-3 text-sm text-[#8B263E]"
+          >
+            {shelfError}
+
+            <button
+              type="button"
+              onClick={fetchShelves}
+              className="ml-2 font-bold underline"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+
+        {/* ======================================================
+            12.5 ESTADOS DE CARGA Y ERRORES DEL CATÁLOGO
+            ====================================================== */}
+
         {loading && (
           <div
             role="status"
             className="text-center py-16 text-[#78716C] flex flex-col items-center space-y-3"
           >
             <div className="w-8 h-8 border-2 border-[#8B263E]/30 border-t-[#8B263E] rounded-full animate-spin" />
-            <p className="text-sm font-medium">Cargando bodega gourmet...</p>
+            <p className="text-sm font-medium">
+              Cargando bodega gourmet...
+            </p>
           </div>
         )}
 
@@ -522,6 +824,7 @@ export default function Dashboard() {
             className="bg-[#FFEBEF] border border-[#8B263E]/30 p-4 rounded-2xl text-[#8B263E] text-sm text-center font-medium"
           >
             {error}
+
             <button
               type="button"
               onClick={fetchWines}
@@ -532,33 +835,46 @@ export default function Dashboard() {
           </div>
         )}
 
+
+        {/* ======================================================
+            12.6 MENSAJE CUANDO NO HAY RESULTADOS
+            ====================================================== */}
+
         {!loading && !error && filteredWines.length === 0 && (
           <div className="text-center py-16 bg-[#FFFFFF] dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F] rounded-3xl p-8 space-y-3">
+
             <span className="text-4xl block">🍷</span>
+
             <h3 className="text-lg font-bold">
               {activeView === 'favorites'
                 ? 'Todavía no tenés vinos favoritos'
-                : 'No hay vinos para este filtro'}
+                : activeView === 'cava'
+                  ? 'Tu cava está vacía'
+                  : activeView === 'consumed'
+                    ? 'Todavía no hay vinos consumidos'
+                    : 'No hay vinos para este filtro'}
             </h3>
 
             <p className="text-xs opacity-70">
               {activeView === 'favorites'
                 ? 'Marcá el corazón de un vino para guardarlo en esta sección.'
-                : 'Intentá seleccionar otra variedad o restablecé la búsqueda.'}
+                : activeView === 'cava'
+                  ? 'Elegí el estado "Tomando" en una tarjeta de vino para agregarlo a tu cava.'
+                  : activeView === 'consumed'
+                    ? 'Cuando marques un vino como "Ya tomados", aparecerá acá.'
+                    : 'Intentá seleccionar otra variedad o restablecé la búsqueda.'}
             </p>
 
-            {activeView === 'favorites' && (
+            {activeView !== 'catalog' && (
               <button
                 type="button"
                 onClick={() => setActiveView('catalog')}
                 className="mt-2 bg-[#4A1222] text-white text-xs px-4 py-2 rounded-xl cursor-pointer"
               >
-                Explorar vinos
+                Explorar catálogo
               </button>
             )}
-            <p className="text-xs opacity-70">
-              Intenta seleccionar otra variedad o restablece la búsqueda.
-            </p>
+
             <button
               type="button"
               onClick={handleResetFilters}
@@ -569,33 +885,55 @@ export default function Dashboard() {
           </div>
         )}
 
+
+        {/* ======================================================
+            12.7 TARJETAS DEL CATÁLOGO
+            ====================================================== */}
+
         {!loading && !error && filteredWines.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredWines.map((wine) => (
-              <WineCard
-                key={wine._id || wine.id}
-                wine={wine}
-                currentUserId={currentUserId}
-                isDarkMode={isDarkMode}
-                onSelect={setSelectedWine}
-                onCalificar={setRatingWine}
-                isFavorite={favoriteWineIds.includes(
-                  String(wine._id || wine.id)
-                )}
-                onToggleFavorite={handleToggleFavorite}
-              />
-            ))}
+
+            {filteredWines.map((wine) => {
+              const wineId = String(getWineId(wine));
+
+              return (
+                <WineCard
+                  key={wineId}
+                  wine={wine}
+                  currentUserId={currentUserId}
+                  isDarkMode={isDarkMode}
+                  onSelect={setSelectedWine}
+                  onCalificar={setRatingWine}
+
+                  // Favoritos
+                  isFavorite={favoriteWineIds.includes(wineId)}
+                  onToggleFavorite={handleToggleFavorite}
+
+                  // Estado de la cava
+                  cavaStatus={shelfStatusByWineId[wineId] || 'Por probar'}
+                  onChangeCavaStatus={handleChangeCavaStatus}
+                  isUpdatingCava={shelfActionIds.includes(wineId)}
+                />
+              );
+            })}
+
           </div>
         )}
       </main>
 
-      {/* Modales */}
+
+      {/* ========================================================
+          13. MODALES
+          ======================================================== */}
+
+      {/* Añadir un vino */}
       <AddWineModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onWineAdded={fetchWines}
       />
 
+      {/* Detalle de un vino */}
       <WineDetailModal
         wine={selectedWine}
         isOpen={Boolean(selectedWine)}
@@ -607,6 +945,7 @@ export default function Dashboard() {
         onSelectUser={setSelectedUserId}
       />
 
+      {/* Calificar un vino */}
       {ratingWine && (
         <RateWineModal
           wine={ratingWine}
@@ -618,12 +957,14 @@ export default function Dashboard() {
         />
       )}
 
+      {/* Perfil de usuario */}
       <UserProfileModal
         userId={selectedUserId}
         currentUserId={currentUserId}
         isOpen={Boolean(selectedUserId)}
         onClose={() => setSelectedUserId(null)}
       />
+
     </div>
   );
 }

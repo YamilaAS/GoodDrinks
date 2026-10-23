@@ -1,5 +1,3 @@
-// src/components/WineCard.jsx
-import { useState } from 'react';
 import StarRating from './StarRating';
 
 export default function WineCard({
@@ -10,8 +8,11 @@ export default function WineCard({
   onCalificar,
   isFavorite = false,
   onToggleFavorite,
+  cavaStatus = 'Por probar',
+  onChangeCavaStatus,
+  isUpdatingCava = false,
 }) {
-  const [cavaStatus, setCavaStatus] = useState('por_probar');
+
 
   const defaultImage =
     'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?auto=format&fit=crop&q=80&w=400';
@@ -185,26 +186,43 @@ export default function WineCard({
           )}
         </div>
 
+
         {/* 4. Selector Cava */}
         <div className="pt-2">
           <span className="text-[9px] font-bold text-[#78716C] dark:text-[#F5F5F4]/60 uppercase tracking-wider block mb-1">
             ESTADO EN MI CAVA:
           </span>
+
           <div className="relative">
             <select
               value={cavaStatus}
-              onChange={(e) => setCavaStatus(e.target.value)}
-              className={`w-full border rounded-xl px-3 py-2 text-xs font-bold appearance-none focus:outline-none cursor-pointer transition-colors ${selectStyle}`}
+              disabled={isUpdatingCava}
+              onChange={(e) => {
+                if (onChangeCavaStatus) {
+                  onChangeCavaStatus(wine, e.target.value);
+                }
+              }}
+              className={`w-full border rounded-xl px-3 py-2 text-xs font-bold appearance-none focus:outline-none cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-wait ${selectStyle}`}
             >
-              <option value="por_probar" className={optionStyle}>📍 Por Probar</option>
-              <option value="en_cava" className={optionStyle}>🍷 En mi Cava</option>
-              <option value="consumido" className={optionStyle}>✅ Consumido</option>
+              <option value="Por probar" className={optionStyle}>
+                📍 Por probar
+              </option>
+
+              <option value="Tomando" className={optionStyle}>
+                🍷 Tomando
+              </option>
+
+              <option value="Ya tomados" className={optionStyle}>
+                ✅ Ya tomados
+              </option>
             </select>
+
             <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#78716C] text-[10px]">
-              ▼
+              {isUpdatingCava ? '...' : '▼'}
             </span>
           </div>
         </div>
+
 
       </div>
     </div>
