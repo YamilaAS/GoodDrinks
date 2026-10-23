@@ -45,6 +45,13 @@ class RatingService {
     return RatingDTO.toResponseList(ratings);
   }
 
+
+  async getRatingsByWineIds(wineIds) {
+    const ratings = await ratingRepository.findByWineIds(wineIds);
+    return RatingDTO.toResponseList(ratings);
+  }
+
+
   async updateRating(ratingId, userId, updateData) {
     const updated = await ratingRepository.update(ratingId, userId, updateData);
     if (!updated) {
@@ -56,14 +63,21 @@ class RatingService {
   }
 
   async deleteRating(ratingId, userId) {
-    const deleted = await ratingRepository.delete(ratingId, userId);
-    if (!deleted) {
-      const error = new Error('Reseña no encontrada o no autorizada');
-      error.statusCode = 404;
-      throw error;
-    }
-    return { message: 'Reseña eliminada exitosamente' };
+  const deleted = await ratingRepository.delete(ratingId, userId);
+
+  if (!deleted) {
+    const error = new Error('Reseña no encontrada o no autorizada');
+    error.statusCode = 404;
+    throw error;
   }
+
+  // Recalcular el promedio del vino después de eliminar la reseña.
+  if (wineRepository.updateAverageRating) {
+    await wineRepository.updateAverageRating(deleted.wine);
+  }
+
+  return { message: 'Reseña eliminada exitosamente' };
+}
 
   async toggleLikeRating(ratingId, userId) {
     const updatedRating = await ratingRepository.toggleLike

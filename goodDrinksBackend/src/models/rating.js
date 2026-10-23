@@ -34,35 +34,39 @@ const RatingSchema = new mongoose.Schema({
 RatingSchema.index({ wine: 1, user: 1 }, { unique: true });
 
 // --- Calcular Promedio de Calificaciones ---
-RatingSchema.statics.calculateAverageRating = async function(wineId) {
+RatingSchema.statics.calculateAverageRating = async function (wineId) {
     const stats = await this.aggregate([
-        { $match: { wine: wineId } },
+        { $match: { wine: new mongoose.Types.ObjectId(wineId) } },
         {
             $group: {
                 _id: '$wine',
-                avgRating: { $avg: '$rating' }
+                averageRating: { $avg: '$rating' },
+                ratingsCount: { $sum: 1 }
             }
         }
     ]);
 
-    try {
-        if (stats.length > 0) {
-            await mongoose.model('Wine').findByIdAndUpdate(wineId, {
-                averageRating: Math.round(stats[0].avgRating * 10) / 10
-            });
-        } else {
-            await mongoose.model('Wine').findByIdAndUpdate(wineId, {
-                averageRating: 0
-            });
+    const averageRating = stats.length > 0
+        ? Math.round(stats[0].averageRating * 10) / 10
+        : 0;
+
+    const ratingsCount = stats.length > 0
+        ? stats[0].ratingsCount
+        : 0;
+
+    await mongoose.model('Wine').findByIdAndUpdate(wineId, {
+        $set: {
+            averageRating,
+            ratingsCount
         }
-    } catch (error) {
-        console.error('Error actualizando el promedio del vino:', error);
-    }
+    });
+
+    return { averageRating, ratingsCount };
 };
 
 // Disparar el cálculo después de guardar una nueva calificación
-RatingSchema.post('save', function() {
-    this.constructor.calculateAverageRating(this.wine);
+RatingSchema.post('save', async function (doc) {
+    await doc.constructor.calculateAverageRating(doc.wine);
 });
 
 // Disparar el cálculo después de eliminar una calificación
@@ -71,5 +75,13 @@ RatingSchema.post('findOneAndDelete', async function(doc) {
         await doc.constructor.calculateAverageRating(doc.wine);
     }
 });
+
+// Disparar el cálculo después de modificar una calificación
+RatingSchema.post('findOneAndUpdate', async function (doc) {
+  if (doc) {
+    await doc.constructor.calculateAverageRating(doc.wine);
+  }
+});
+
 
 module.exports = mongoose.models.Rating || mongoose.model('Rating', RatingSchema);

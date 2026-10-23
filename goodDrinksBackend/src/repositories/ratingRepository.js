@@ -16,6 +16,14 @@ class RatingRepository {
       .sort({ createdAt: -1 });
   }
 
+
+  async findByWineIds(wineIds) {
+    return await Rating.find({ wine: { $in: wineIds } })
+      .populate('user', 'username')
+      .sort({ createdAt: -1 });
+  }
+
+
   async findByIdAndUser(ratingId, userId) {
     return await Rating.findOne({ _id: ratingId, user: userId });
   }
@@ -24,8 +32,28 @@ class RatingRepository {
     return await Rating.findById(ratingId);
   }
 
-  async deleteByIdAndUser(ratingId, userId) {
-    return await Rating.findOneAndDelete({ _id: ratingId, user: userId });
+  async update(ratingId, userId, updateData) {
+  return await Rating.findOneAndUpdate(
+    {
+      _id: ratingId,
+      user: userId,
+    },
+    {
+      $set: updateData,
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+}
+
+  
+  async delete(ratingId, userId) {
+    return await Rating.findOneAndDelete({
+      _id: ratingId,
+      user: userId
+    });
   }
 
   async toggleLike(ratingId, userId, hasLiked) {

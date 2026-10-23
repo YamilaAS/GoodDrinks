@@ -7,6 +7,8 @@ const { createRatingSchema, updateRatingSchema } = require('../validationSchemas
 
 // Ruta Pública
 router.get('/wine/:wineId', ratingController.getRatingsByWine);
+router.post('/batch', ratingController.getRatingsByWineIds);
+
 
 // Rutas Protegidas
 router.post('/', verifyToken, validate(createRatingSchema), ratingController.createRating);
