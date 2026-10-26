@@ -10,7 +10,7 @@ export default function WineDetailModal({
   currentUserId,
   onSelectUser,
 }) {
-  console.log('currentUserId:', currentUserId);
+  
 
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(false);

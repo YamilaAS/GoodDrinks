@@ -32,23 +32,16 @@ const WINE_TYPE_MAP = {
 };
 
 // Convierte textos y números a minúsculas para las búsquedas.
+
 const getText = (value) =>
   typeof value === 'string' || typeof value === 'number'
-    ? String(value).toLowerCase()
+    ? String(value)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
     : '';
 
-// Obtiene un número válido, por ejemplo para ordenar por precio.
-const getNumber = (...values) => {
-  for (const value of values) {
-    if (value !== null && value !== undefined && value !== '') {
-      const number = Number(value);
 
-      if (Number.isFinite(number)) return number;
-    }
-  }
-
-  return 0;
-};
 
 // Recupera el usuario guardado en localStorage.
 const getStoredUser = () => {
@@ -86,6 +79,7 @@ const getWineId = (wine) => {
 
   return wine;
 };
+
 
 
 // ============================================================
@@ -137,6 +131,54 @@ export default function Dashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('ALL');
   const [sortBy, setSortBy] = useState('DEFAULT');
+  const [selectedVarieties, setSelectedVarieties] = useState([]);
+  const [showVarietyFilter, setShowVarietyFilter] = useState(false);
+
+
+  // Variedades disponibles: las habituales y las que ya existen en el catálogo.
+
+  const availableVarieties = useMemo(() => {
+    const commonVarieties = [
+      'Bonarda',
+      'Cabernet Franc',
+      'Cabernet Sauvignon',
+      'Chardonnay',
+      'Chenin Blanc',
+      'Malbec',
+      'Merlot',
+      'Pinot Grigio',
+      'Pinot Noir',
+      'Sauvignon Blanc',
+      'Syrah',
+      'Tempranillo',
+      'Torrontés',
+      'Viognier',
+    ];
+
+    const savedVarieties = wines
+      .map((wine) =>
+        typeof wine?.variety === 'string'
+          ? wine.variety.trim()
+          : ''
+      )
+      .filter(Boolean);
+
+    const uniqueVarieties = new Map();
+
+    [...commonVarieties, ...savedVarieties].forEach((variety) => {
+      const normalized = getText(variety);
+
+      if (normalized && !uniqueVarieties.has(normalized)) {
+        uniqueVarieties.set(normalized, variety);
+      }
+    });
+
+    return [...uniqueVarieties.values()].sort((a, b) =>
+      a.localeCompare(b, 'es')
+    );
+  }, [wines]);
+
+
 
   // Vistas disponibles:
   // catalog | favorites | cava | consumed
@@ -450,58 +492,58 @@ export default function Dashboard() {
   // 9. BUSCADOR Y FILTROS
   // ============================================================
 
+
   const handleSearchChange = (event) => {
-    const value = event.target.value;
-
-    setSearchTerm(value);
-
-    if (value.trim()) {
-      setSelectedType('ALL');
-    }
+    setSearchTerm(event.target.value);
   };
 
   const handleTypeChange = (event) => {
-    const value = event.target.value;
-
-    setSelectedType(value);
-
-    if (value !== 'ALL') {
-      setSearchTerm('');
-    }
+    setSelectedType(event.target.value);
   };
 
   const handleResetFilters = () => {
     setSearchTerm('');
     setSelectedType('ALL');
+    setSelectedVarieties([]);
     setSortBy('DEFAULT');
+    setShowVarietyFilter(false);
   };
+
 
 
   // ============================================================
   // 10. FILTRAR Y ORDENAR LOS VINOS
   // ============================================================
 
-  const filteredWines = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    // Primero elegimos qué vinos pertenecen a la vista.
+  const filteredWines = useMemo(() => {
+    const normalizedSearch = getText(searchTerm.trim());
+
+    // Primero elegimos los vinos correspondientes a la vista.
     let winesToShow = wines;
 
     if (activeView === 'favorites') {
       winesToShow = wines.filter((wine) =>
         favoriteWineIds.includes(String(getWineId(wine)))
       );
+    } else if (activeView === 'planned') {
+      winesToShow = wines.filter(
+        (wine) =>
+          shelfStatusByWineId[String(getWineId(wine))] === 'Por probar'
+      );
     } else if (activeView === 'cava') {
-      winesToShow = wines.filter((wine) =>
-        shelfStatusByWineId[String(getWineId(wine))] === 'Tomando'
+      winesToShow = wines.filter(
+        (wine) =>
+          shelfStatusByWineId[String(getWineId(wine))] === 'Tomando'
       );
     } else if (activeView === 'consumed') {
-      winesToShow = wines.filter((wine) =>
-        shelfStatusByWineId[String(getWineId(wine))] === 'Ya tomados'
+      winesToShow = wines.filter(
+        (wine) =>
+          shelfStatusByWineId[String(getWineId(wine))] === 'Ya tomados'
       );
     }
 
-    // Después aplicamos búsqueda y variedad.
+    // Después aplicamos búsqueda, tipo y variedad.
     return winesToShow
       .filter((wine) => {
         if (normalizedSearch) {
@@ -520,6 +562,7 @@ export default function Dashboard() {
           if (!matchesSearch) return false;
         }
 
+        // Filtro por tipo de vino.
         if (selectedType !== 'ALL') {
           const wineInfo = [
             wine?.type,
@@ -532,28 +575,56 @@ export default function Dashboard() {
             .filter(Boolean)
             .join(' ');
 
-          const keywords =
-            WINE_TYPE_MAP[selectedType.toLowerCase()] || [
-              selectedType.toLowerCase(),
-            ];
+          const keywords = (
+            WINE_TYPE_MAP[getText(selectedType)] || [
+              getText(selectedType),
+            ]
+          ).map(getText);
 
           if (!keywords.some((keyword) => wineInfo.includes(keyword))) {
             return false;
           }
         }
 
+        // Filtro por una o varias variedades.
+        if (
+          selectedVarieties.length > 0 &&
+          !selectedVarieties.some(
+            (variety) =>
+              getText(wine?.variety) === getText(variety)
+          )
+        ) {
+          return false;
+        }
+
         return true;
       })
-      // Finalmente ordenamos los resultados.
+      // Finalmente, ordenamos por añada si corresponde.
       .sort((a, b) => {
-        const priceA = getNumber(a?.price, a?.cost);
-        const priceB = getNumber(b?.price, b?.cost);
-        const yearA = getNumber(a?.vintage, a?.year);
-        const yearB = getNumber(b?.vintage, b?.year);
+        if (sortBy === 'YEAR_DESC') {
+          const yearA = a?.vintage ?? a?.year;
+          const yearB = b?.vintage ?? b?.year;
 
-        if (sortBy === 'PRICE_ASC') return priceA - priceB;
-        if (sortBy === 'PRICE_DESC') return priceB - priceA;
-        if (sortBy === 'YEAR_DESC') return yearB - yearA;
+          const parsedYearA =
+            yearA !== '' &&
+              yearA != null &&
+              Number.isFinite(Number(yearA))
+              ? Number(yearA)
+              : null;
+
+          const parsedYearB =
+            yearB !== '' &&
+              yearB != null &&
+              Number.isFinite(Number(yearB))
+              ? Number(yearB)
+              : null;
+
+          if (parsedYearA === null && parsedYearB === null) return 0;
+          if (parsedYearA === null) return 1;
+          if (parsedYearB === null) return -1;
+
+          return parsedYearB - parsedYearA;
+        }
 
         return 0;
       });
@@ -564,6 +635,7 @@ export default function Dashboard() {
     activeView,
     searchTerm,
     selectedType,
+    selectedVarieties,
     sortBy,
   ]);
 
@@ -583,6 +655,19 @@ export default function Dashboard() {
   const inputBg = isDarkMode
     ? 'bg-[#120A0E] border-[#3A222F] text-[#F5F5F4] focus:border-[#6B1D34]'
     : 'bg-[#F9F6F0] border-[#E8E2D5] text-[#1C1917] focus:border-[#4A1222]';
+
+
+  // Estilos compartidos para los botones de navegación.
+  const getViewButtonClass = (view) => {
+    if (activeView === view) {
+      return 'bg-[#4A1222] text-white border border-[#4A1222] shadow-md';
+    }
+
+    return isDarkMode
+      ? 'bg-[#1E1218] text-[#F5F5F4] border border-[#3A222F] hover:bg-[#2B1921]'
+      : 'bg-white text-[#1C1917] border border-[#E8E2D5] hover:bg-[#F1E9DE]';
+  };
+
 
 
   // ============================================================
@@ -606,61 +691,74 @@ export default function Dashboard() {
             ====================================================== */}
         <div className="flex flex-wrap items-center gap-3">
 
-          <button
-            type="button"
-            onClick={() => setActiveView('catalog')}
-            aria-pressed={activeView === 'catalog'}
-            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'catalog'
-              ? 'bg-[#4A1222] text-white shadow-md'
-              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
-              }`}
-          >
-            🍷 Catálogo
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveView('favorites')}
-            aria-pressed={activeView === 'favorites'}
-            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'favorites'
-              ? 'bg-[#4A1222] text-white shadow-md'
-              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
-              }`}
-          >
-            ❤️ Mis favoritos ({favoriteWineIds.length})
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
 
-          <button
-            type="button"
-            onClick={() => setActiveView('cava')}
-            aria-pressed={activeView === 'cava'}
-            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'cava'
-              ? 'bg-[#4A1222] text-white shadow-md'
-              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
-              }`}
-          >
-            🍷 Mi cava (
-            {Object.values(shelfStatusByWineId).filter(
-              (status) => status === 'Tomando'
-            ).length}
-            )
-          </button>
+            {/* Catálogo */}
+            <button
+              type="button"
+              onClick={() => setActiveView('catalog')}
+              aria-pressed={activeView === 'catalog'}
+              className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 ${getViewButtonClass('catalog')}`}
+            >
+              🍷 Catálogo
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveView('consumed')}
-            aria-pressed={activeView === 'consumed'}
-            className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-colors ${activeView === 'consumed'
-              ? 'bg-[#4A1222] text-white shadow-md'
-              : 'bg-white dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F]'
-              }`}
-          >
-            ✅ Ya tomados (
-            {Object.values(shelfStatusByWineId).filter(
-              (status) => status === 'Ya tomados'
-            ).length}
-            )
-          </button>
+            {/* Mis favoritos */}
+            <button
+              type="button"
+              onClick={() => setActiveView('favorites')}
+              aria-pressed={activeView === 'favorites'}
+              className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 ${getViewButtonClass('favorites')}`}
+            >
+              ❤️ Mis favoritos ({favoriteWineIds.length})
+            </button>
+
+            {/* Mi cava: vinos que estás tomando */}
+            <button
+              type="button"
+              onClick={() => setActiveView('cava')}
+              aria-pressed={activeView === 'cava'}
+              className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 ${getViewButtonClass('cava')}`}
+            >
+              🍷 Mi cava (
+              {Object.values(shelfStatusByWineId).filter(
+                (status) => status === 'Tomando'
+              ).length}
+              )
+            </button>
+
+            {/* Ya tomados */}
+            <button
+              type="button"
+              onClick={() => setActiveView('consumed')}
+              aria-pressed={activeView === 'consumed'}
+              className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 ${getViewButtonClass('consumed')}`}
+            >
+              ✅ Ya tomados (
+              {Object.values(shelfStatusByWineId).filter(
+                (status) => status === 'Ya tomados'
+              ).length}
+              )
+            </button>
+
+            {/* Por probar */}
+            <button
+              type="button"
+              onClick={() => setActiveView('planned')}
+              aria-pressed={activeView === 'planned'}
+              className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-200 ${getViewButtonClass('planned')}`}
+            >
+              📚 Por probar (
+              {Object.values(shelfStatusByWineId).filter(
+                (status) => status === 'Por probar'
+              ).length}
+              )
+            </button>
+
+          </div>
+
+
         </div>
 
 
@@ -669,10 +767,10 @@ export default function Dashboard() {
             ====================================================== */}
         <div className={`border rounded-3xl p-4 sm:p-6 transition-all ${panelBg}`}>
 
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex flex-col gap-4">
 
             {/* Buscador */}
-            <div className="relative w-full md:w-80">
+            <div className="relative w-full">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#78716C] text-sm">
                 🔍
               </span>
@@ -699,7 +797,7 @@ export default function Dashboard() {
             </div>
 
             {/* Filtros y botón para añadir vinos */}
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
 
               <select
                 value={selectedType}
@@ -707,12 +805,88 @@ export default function Dashboard() {
                 aria-label="Filtrar por tipo de vino"
                 className={`border text-xs sm:text-sm rounded-2xl px-3 py-2.5 outline-none cursor-pointer ${inputBg}`}
               >
-                <option value="ALL">Todas las Variedades</option>
+                <option value="ALL">Todos los tipos</option>
                 <option value="tinto">🍷 Tinto</option>
                 <option value="blanco">🥂 Blanco</option>
                 <option value="rosado">🌸 Rosado</option>
                 <option value="espumante">🍾 Espumante</option>
               </select>
+
+
+              <div className="relative w-full sm:w-auto sm:min-w-56">
+                <button
+                  type="button"
+                  onClick={() => setShowVarietyFilter((open) => !open)}
+                  aria-expanded={showVarietyFilter}
+                  aria-label="Filtrar por variedades de uva"
+                  className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm transition-colors ${inputBg}`}
+                >
+                  <span className="truncate">
+                    {selectedVarieties.length === 0
+                      ? 'Todas las variedades'
+                      : `${selectedVarieties.length} variedad${selectedVarieties.length === 1 ? '' : 'es'}`}
+                  </span>
+
+                  <span aria-hidden="true">
+                    {showVarietyFilter ? '▲' : '▼'}
+                  </span>
+                </button>
+
+                {showVarietyFilter && (
+                  <div
+                    className={`absolute left-0 right-0 top-full z-30 mt-2 max-h-72 overflow-y-auto rounded-2xl border p-3 shadow-xl sm:w-72 ${panelBg}`}
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold">
+                        Elegí las variedades
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVarieties([])}
+                        className="text-xs font-semibold text-[#8B263E] underline dark:text-[#D4AF37]"
+                      >
+                        Limpiar
+                      </button>
+                    </div>
+
+                    {availableVarieties.map((variety) => {
+                      const checked = selectedVarieties.some(
+                        (item) => getText(item) === getText(variety)
+                      );
+
+                      return (
+                        <label
+                          key={getText(variety)}
+                          className="flex cursor-pointer items-center gap-3 rounded-xl px-2 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              setSelectedVarieties((current) =>
+                                event.target.checked
+                                  ? current.some(
+                                    (item) => getText(item) === getText(variety)
+                                  )
+                                    ? current
+                                    : [...current, variety]
+                                  : current.filter(
+                                    (item) => getText(item) !== getText(variety)
+                                  )
+                              );
+                            }}
+                            className="h-4 w-4 accent-[#8B263E]"
+                          />
+
+                          <span>{variety}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
 
               <select
                 value={sortBy}
@@ -721,8 +895,6 @@ export default function Dashboard() {
                 className={`border text-xs sm:text-sm rounded-2xl px-3 py-2.5 outline-none cursor-pointer ${inputBg}`}
               >
                 <option value="DEFAULT">Ordenar por Defecto</option>
-                <option value="PRICE_ASC">Precio: Menor a Mayor</option>
-                <option value="PRICE_DESC">Precio: Mayor a Menor</option>
                 <option value="YEAR_DESC">Añada más Reciente</option>
               </select>
 
@@ -738,25 +910,30 @@ export default function Dashboard() {
           </div>
 
           {/* Información sobre filtros activos */}
-          {(searchTerm || selectedType !== 'ALL' || sortBy !== 'DEFAULT') && (
-            <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#E8E2D5] dark:border-[#3A222F] text-xs text-[#78716C]">
-              <span>
-                Mostrando{' '}
-                <strong className="text-[#8B263E] dark:text-[#D4AF37]">
-                  {filteredWines.length}
-                </strong>{' '}
-                de {wines.length} vinos
-              </span>
+          {(
+            searchTerm ||
+            selectedType !== 'ALL' ||
+            selectedVarieties.length > 0 ||
+            sortBy !== 'DEFAULT'
+          ) && (
+              <div className="flex items-center justify-between pt-3 mt-3 border-t border-[#E8E2D5] dark:border-[#3A222F] text-xs text-[#78716C]">
+                <span aria-live="polite">
+                  Mostrando{' '}
+                  <strong className="text-[#8B263E] dark:text-[#D4AF37]">
+                    {filteredWines.length}
+                  </strong>{' '}
+                  {filteredWines.length === 1 ? 'resultado' : 'resultados'}
+                </span>
 
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="text-[#8B263E] dark:text-[#D4AF37] font-semibold underline cursor-pointer"
-              >
-                Restablecer todos los filtros
-              </button>
-            </div>
-          )}
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="text-[#8B263E] dark:text-[#D4AF37] font-semibold underline cursor-pointer"
+                >
+                  Restablecer todos los filtros
+                </button>
+              </div>
+            )}
         </div>
 
 
@@ -841,11 +1018,12 @@ export default function Dashboard() {
             ====================================================== */}
 
         {!loading && !error && filteredWines.length === 0 && (
-          <div className="text-center py-16 bg-[#FFFFFF] dark:bg-[#1E1218] border border-[#E8E2D5] dark:border-[#3A222F] rounded-3xl p-8 space-y-3">
 
-            <span className="text-4xl block">🍷</span>
+          <div className={`text-center py-16 border rounded-3xl p-8 space-y-3 transition-colors duration-300 ${panelBg}`}>
 
-            <h3 className="text-lg font-bold">
+            <span className="text-4xl block" aria-hidden="true">🍷</span>
+
+            <h3 className={`text-lg font-bold ${isDarkMode ? 'text-[#F5F5F4]' : 'text-[#4A1222]'}`}>
               {activeView === 'favorites'
                 ? 'Todavía no tenés vinos favoritos'
                 : activeView === 'cava'
@@ -855,7 +1033,7 @@ export default function Dashboard() {
                     : 'No hay vinos para este filtro'}
             </h3>
 
-            <p className="text-xs opacity-70">
+            <p className={`text-sm ${isDarkMode ? 'text-[#C8BFC3]' : 'text-[#78716C]'}`}>
               {activeView === 'favorites'
                 ? 'Marcá el corazón de un vino para guardarlo en esta sección.'
                 : activeView === 'cava'
@@ -866,22 +1044,22 @@ export default function Dashboard() {
             </p>
 
             {activeView !== 'catalog' && (
+
               <button
                 type="button"
-                onClick={() => setActiveView('catalog')}
-                className="mt-2 bg-[#4A1222] text-white text-xs px-4 py-2 rounded-xl cursor-pointer"
+                onClick={() => {
+                  setActiveView('catalog');
+                  handleResetFilters();
+                }}
+                className={`mt-2 text-xs px-4 py-2 rounded-xl cursor-pointer font-semibold transition-colors ${isDarkMode
+                  ? 'bg-[#120A0E] text-[#F5F5F4] border border-[#3A222F] hover:bg-[#2B1921]'
+                  : 'bg-[#F1E9DE] text-[#1C1917] border border-[#E8E2D5] hover:bg-[#E8DFD2]'
+                  }`}
               >
-                Explorar catálogo
+                Volver al catálogo
               </button>
-            )}
 
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="mt-2 bg-[#F9F6F0] dark:bg-[#120A0E] text-xs px-4 py-2 rounded-xl cursor-pointer"
-            >
-              Ver todos los vinos
-            </button>
+            )}
           </div>
         )}
 

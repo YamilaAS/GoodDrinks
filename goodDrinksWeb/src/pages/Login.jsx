@@ -16,52 +16,52 @@ export default function Login() {
     if (error) setError('');
   };
 
-  
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
 
-  try {
-    const response = await authService.login(formData);
-    const payload = response?.data || response;
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
 
-    const token = payload?.token;
-    const user = payload?.user;
+    try {
+      const response = await authService.login(formData);
+      const payload = response?.data || response;
 
-    if (!token) {
-      throw new Error(
-        'No se encontró el token de acceso en la respuesta del servidor.'
-      );
+      const token = payload?.token;
+      const user = payload?.user;
+
+      if (!token) {
+        throw new Error(
+          'No se encontró el token de acceso en la respuesta del servidor.'
+        );
+      }
+
+      login(user, token);
+
+      console.log('[DEBUG] Login correcto');
+      console.log('[DEBUG] Usuario recibido:', user);
+      console.log('[DEBUG] Token recibido:', Boolean(token));
+
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      console.error('Error durante el login:', err);
+
+      const message =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Error inesperado al procesar el inicio de sesión.';
+
+      setError(message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    login(user, token);
 
-    console.log('[DEBUG] Login correcto');
-    console.log('[DEBUG] Usuario recibido:', user);
-    console.log('[DEBUG] Token recibido:', Boolean(token));
-
-    navigate('/dashboard', { replace: true });
-  } catch (err) {
-    console.error('Error durante el login:', err);
-
-    const message =
-      err.response?.data?.error ||
-      err.response?.data?.message ||
-      err.message ||
-      'Error inesperado al procesar el inicio de sesión.';
-
-    setError(message);
-  } finally {
-    setLoading(false);
-  }
-};
-
-console.log('[DEBUG] Login se está renderizando');
   return (
     <div className="min-h-screen bg-[#120A0E] text-[#F5F5F4] flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-[#1E1218] border border-[#3A222F] rounded-3xl p-8 shadow-2xl space-y-6">
-        
+
         {/* Header Branding */}
         <div className="text-center space-y-2">
           <span className="text-4xl block">🍷</span>
@@ -119,12 +119,25 @@ console.log('[DEBUG] Login se está renderizando');
           </button>
         </form>
 
-        <div className="text-center pt-2 border-t border-[#3A222F] text-xs text-[#78716C]">
-          ¿No tienes una cuenta?{' '}
-          <Link to="/register" className="text-[#D4AF37] hover:underline font-bold">
-            Regístrate gratis
+
+        <div className="border-t border-[#3A222F] pt-5 text-center space-y-3">
+          <p className="text-sm text-[#B8A7AB]">
+            ¿Todavía no tenés una cuenta?
+          </p>
+
+          <Link
+            to="/register"
+            className="flex w-full min-h-12 items-center justify-center gap-2 rounded-xl border border-[#D4AF37]/50 bg-[#D4AF37]/5 px-4 py-3 text-sm font-bold text-[#D4AF37] transition-all duration-200 hover:border-[#D4AF37] hover:bg-[#D4AF37]/10 hover:text-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37] active:scale-[0.99]"
+          >
+            Crear mi cuenta
+            <span aria-hidden="true">→</span>
           </Link>
+
+          <p className="text-xs text-[#806D74]">
+            Descubrí tu próxima botella favorita.
+          </p>
         </div>
+        
 
       </div>
     </div>

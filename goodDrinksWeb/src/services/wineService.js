@@ -20,6 +20,17 @@ export const wineService = {
         return response.data;
     },
 
+    updateWine: async (id, wineData) => {
+        const response = await api.put(`/wines/${id}`, wineData);
+        return response.data;
+    },
+
+    deleteWine: async (id) => {
+        const response = await api.delete(`/wines/${id}`);
+        return response.data;
+    },
+
+
 
     // Favoritos de vinos
     getMyFavorites: async () => {

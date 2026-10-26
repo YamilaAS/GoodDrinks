@@ -7,16 +7,22 @@ import {
   useCallback,
 } from 'react';
 
+import { useNavigate } from 'react-router-dom';
 import api, { setUnauthorizedHandler } from '../api/axios';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const navigate = useNavigate();
+
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const logout = useCallback(() => {
+  // ============================================================
+  // CERRAR SESIÓN
+  // ============================================================
+  const logout = useCallback((redirect = true) => {
     setUser(null);
     setToken(null);
 
@@ -24,8 +30,15 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token');
 
     delete api.defaults.headers.common.Authorization;
-  }, []);
 
+    if (redirect) {
+      navigate('/login', { replace: true });
+    }
+  }, [navigate]);
+
+  // ============================================================
+  // INICIAR SESIÓN
+  // ============================================================
   const login = useCallback((data, explicitToken) => {
     // Admite login(userData, token) y login({ user, token }).
     const userData = explicitToken
@@ -41,17 +54,23 @@ export function AuthProvider({ children }) {
       throw new Error('No se recibió un usuario o token válido.');
     }
 
+    // Guardar los datos de la sesión.
     localStorage.setItem('user', JSON.stringify(userData));
     localStorage.setItem('token', authToken);
 
+    // Configurar el token para las peticiones siguientes.
     api.defaults.headers.common.Authorization = `Bearer ${authToken}`;
 
+    // Actualizar el estado de React.
     setUser(userData);
     setToken(authToken);
   }, []);
 
-  // Restaurar la sesión y registrar el manejador de 401.
+  // ============================================================
+  // RESTAURAR SESIÓN Y CONTROLAR ERRORES DE AUTENTICACIÓN
+  // ============================================================
   useEffect(() => {
+    // Si Axios recibe un 401, cerrar la sesión.
     setUnauthorizedHandler(logout);
 
     const storedToken = localStorage.getItem('token');
@@ -61,30 +80,49 @@ export function AuthProvider({ children }) {
       try {
         const parsedUser = JSON.parse(storedUser);
 
-        if (!parsedUser || typeof parsedUser !== 'object' || Array.isArray(parsedUser)) {
+        if (
+          !parsedUser ||
+          typeof parsedUser !== 'object' ||
+          Array.isArray(parsedUser)
+        ) {
           throw new Error('Los datos del usuario guardado no son válidos.');
         }
 
         setUser(parsedUser);
         setToken(storedToken);
 
-        api.defaults.headers.common.Authorization = `Bearer ${storedToken}`;
+        api.defaults.headers.common.Authorization =
+          `Bearer ${storedToken}`;
       } catch (error) {
-        console.error('No se pudo restaurar la sesión guardada:', error);
+        console.error(
+          'No se pudo restaurar la sesión guardada:',
+          error
+        );
+
         logout();
       }
     } else {
-      // Evitar conservar una sesión incompleta.
-      logout();
+      // Limpiar credenciales incompletas sin redirigir.
+      setUser(null);
+      setToken(null);
+
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+
+      delete api.defaults.headers.common.Authorization;
     }
 
     setLoading(false);
 
+    // Desregistrar el manejador cuando se desmonte el contexto.
     return () => {
       setUnauthorizedHandler(null);
     };
   }, [logout]);
 
+  // ============================================================
+  // VALORES DISPONIBLES PARA TODA LA APLICACIÓN
+  // ============================================================
   return (
     <AuthContext.Provider
       value={{
@@ -101,6 +139,9 @@ export function AuthProvider({ children }) {
   );
 }
 
+// ============================================================
+// HOOK PARA ACCEDER A LA AUTENTICACIÓN
+// ============================================================
 export function useAuth() {
   const context = useContext(AuthContext);
 
